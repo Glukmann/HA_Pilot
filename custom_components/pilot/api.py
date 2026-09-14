@@ -39,17 +39,48 @@ class PilotApiClient:
         """Fetch the runtime status snapshot.
 
         Returns a dict with keys: status, vitrine_age_s, cost_today,
-        queue_size, runtime_version.
+        queue_size, awaiting_confirmation, runtime_version, persona
+        (butler_observer/politeness/verbosity/conservative, 0-100),
+        daily_budget, persona_preset, mode, current_focus.
         """
         return await self._request("GET", f"{API_PREFIX}/status")
 
-    async def _request(self, method: str, path: str) -> dict[str, Any]:
+    async def async_set_persona(self, slider: str, value: int) -> None:
+        """Set one persona slider (the four PERSONA_SLIDERS keys)."""
+        await self._request(
+            "POST", f"{API_PREFIX}/persona", json={"slider": slider, "value": value}
+        )
+
+    async def async_set_daily_budget(self, value: float) -> None:
+        """Set the hard daily LLM budget in currency units."""
+        await self._request("POST", f"{API_PREFIX}/budget", json={"value": value})
+
+    async def async_set_persona_preset(self, preset: str) -> None:
+        """Apply a named persona preset (butler/observer/economy)."""
+        await self._request("POST", f"{API_PREFIX}/preset", json={"preset": preset})
+
+    async def async_set_mode(self, mode: str) -> None:
+        """Set the home mode (normal/vacation/guests/sick)."""
+        await self._request("POST", f"{API_PREFIX}/mode", json={"mode": mode})
+
+    async def async_set_current_focus(self, focus: str) -> None:
+        """Set the agent's current focus note."""
+        await self._request("POST", f"{API_PREFIX}/focus", json={"focus": focus})
+
+    async def async_reset(self, target: str) -> None:
+        """Reset learning or everything (target: learning | all)."""
+        await self._request("POST", f"{API_PREFIX}/reset", json={"target": target})
+
+    async def _request(
+        self, method: str, path: str, json: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._token}"} if self._token else None
         try:
             async with self._session.request(
                 method,
                 f"{self.base_url}{path}",
                 headers=headers,
+                json=json,
                 timeout=ClientTimeout(total=REQUEST_TIMEOUT),
             ) as resp:
                 resp.raise_for_status()

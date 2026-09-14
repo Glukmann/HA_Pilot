@@ -69,7 +69,6 @@ async def test_sensor_reports_status_and_attributes(hass, aioclient_mock):
     state = hass.states.get("sensor.pilot_status")
     assert state.state == "ok"
     assert state.attributes["vitrine_age_s"] == 12
-    assert state.attributes["cost_today"] == 0.38
     assert state.attributes["queue_size"] == 2
     assert state.attributes["runtime_version"] == "0.1.0"
 

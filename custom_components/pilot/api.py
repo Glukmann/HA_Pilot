@@ -71,6 +71,23 @@ class PilotApiClient:
         """Reset learning or everything (target: learning | all)."""
         await self._request("POST", f"{API_PREFIX}/reset", json={"target": target})
 
+    async def async_get_queue(self) -> list[dict[str, Any]]:
+        """Fetch the confirmation queue (trust loop)."""
+        data = await self._request("GET", f"{API_PREFIX}/queue")
+        return cast(list[dict[str, Any]], data.get("items", []))
+
+    async def async_confirm(self, item_id: str, decision: str) -> None:
+        """Approve or reject a queue item (decision: yes | no)."""
+        await self._request(
+            "POST",
+            f"{API_PREFIX}/queue/confirm",
+            json={"id": item_id, "decision": decision},
+        )
+
+    async def async_get_vitrine(self) -> dict[str, Any]:
+        """Fetch the home data vitrine (snapshot text lines + freshness)."""
+        return await self._request("GET", f"{API_PREFIX}/vitrine")
+
     async def _request(
         self, method: str, path: str, json: dict[str, Any] | None = None
     ) -> dict[str, Any]:

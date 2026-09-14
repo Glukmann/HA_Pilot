@@ -49,9 +49,9 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
             return {"base": "cannot_connect"}
         return {}
 
-    def _async_set_unique_id_and_abort_if_configured(self) -> None:
+    async def _async_set_unique_id_and_abort_if_configured(self) -> None:
         """Single-instance integration: one Pilot per Home Assistant."""
-        self.context["unique_id"] = DOMAIN
+        await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 
     async def async_step_user(
@@ -62,7 +62,7 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             errors = await self._async_validate_or_error(user_input)
             if not errors:
-                self._async_set_unique_id_and_abort_if_configured()
+                await self._async_set_unique_id_and_abort_if_configured()
                 return self.async_create_entry(title="Pilot", data=user_input)
 
         schema = vol.Schema(
@@ -80,7 +80,7 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
         self, discovery_info: HassioServiceInfo
     ) -> ConfigFlowResult:
         """Handle Supervisor discovery of the Pilot add-on."""
-        self._async_set_unique_id_and_abort_if_configured()
+        await self._async_set_unique_id_and_abort_if_configured()
         self._hassio_data = {
             CONF_RUNTIME_HOST: discovery_info.config["host"],
             CONF_RUNTIME_PORT: DEFAULT_RUNTIME_PORT,

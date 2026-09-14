@@ -45,7 +45,8 @@ class PilotStatusSensor(CoordinatorEntity[PilotDataUpdateCoordinator], SensorEnt
     @property
     def native_value(self) -> str | None:
         """Return the runtime status (ok / degraded / down)."""
-        return self.coordinator.data.get("status")
+        value = self.coordinator.data.get("status")
+        return str(value) if value is not None else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

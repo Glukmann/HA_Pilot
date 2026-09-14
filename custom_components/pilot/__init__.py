@@ -41,4 +41,4 @@ async def async_setup_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> boo
 async def async_unload_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> bool:
     """Unload a config entry."""
     async_sync_repairs_issue(hass, entry.entry_id, False)
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    return bool(await hass.config_entries.async_unload_platforms(entry, PLATFORMS))

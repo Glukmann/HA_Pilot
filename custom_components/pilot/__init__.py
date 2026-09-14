@@ -3,9 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from homeassistant.components.frontend import async_register_built_in_panel
-from homeassistant.components.http.server import StaticPathConfig
+
+if TYPE_CHECKING:
+    from homeassistant.components.http.server import StaticPathConfig
+else:
+    try:
+        from homeassistant.components.http.server import (  # type: ignore[no-redef]
+            StaticPathConfig,
+        )
+    except ImportError:  # HA < 2026.8 keeps it in the http package
+        from homeassistant.components.http import (  # type: ignore[no-redef]
+            StaticPathConfig,
+        )
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 

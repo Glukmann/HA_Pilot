@@ -25,12 +25,11 @@
   "issues": {
     "runtime_unreachable": {
       "title": "Pilot runtime is unreachable",
-      "description": "Home Assistant cannot reach the Pilot runtime. The add-on may be stopped, or the configured host/port is wrong. Home automation keeps working; only Pilot features are paused. This issue clears itself once the runtime is back.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Pilot runtime unreachable",
-            "description": "The Pilot runtime cannot be reached. Check that the add-on is running and the host/port are correct."
+            "description": "Home Assistant cannot reach the Pilot runtime. The add-on may be stopped, or the configured host/port is wrong. Home automation keeps working; only Pilot features are paused. This issue clears itself once the runtime is back."
           }
         },
         "abort": {

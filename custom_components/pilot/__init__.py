@@ -2,11 +2,30 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from homeassistant.components.frontend import async_register_built_in_panel
+
+if TYPE_CHECKING:
+    from homeassistant.components.http.server import StaticPathConfig
+else:
+    try:
+        from homeassistant.components.http.server import (  # type: ignore[no-redef]
+            StaticPathConfig,
+        )
+    except ImportError:  # HA < 2026.8 keeps it in the http package
+        from homeassistant.components.http import (  # type: ignore[no-redef]
+            StaticPathConfig,
+        )
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from .const import DOMAIN
 from .coordinator import PilotConfigEntry, PilotDataUpdateCoordinator
+from .notify import async_setup_notify
 from .repairs import async_sync_repairs_issue
+from .websocket_api import async_register_commands
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -16,6 +35,11 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.TEXT,
 ]
+
+FRONTEND_DIR = Path(__file__).parent / "frontend"
+PANEL_URL_PATH = "pilot"
+STATIC_URL = f"/{DOMAIN}_static"
+PANEL_MODULE_URL = f"{STATIC_URL}/panel.js"
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: PilotConfigEntry) -> None:
@@ -42,8 +66,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> boo
     )
     async_sync_repairs_issue(hass, entry.entry_id, not coordinator.last_update_success)
 
+    async_register_commands(hass)
+    await async_register_panel(hass)
+    await async_setup_notify(hass, entry)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def async_register_panel(hass: HomeAssistant) -> None:
+    """Register the sidebar panel and its static frontend."""
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(STATIC_URL, str(FRONTEND_DIR), cache_headers=False)]
+    )
+    async_register_built_in_panel(
+        hass,
+        component_name=PANEL_URL_PATH,
+        sidebar_title="Pilot",
+        sidebar_icon="mdi:robot-outline",
+        frontend_url_path=PANEL_URL_PATH,
+        require_admin=True,
+        config={
+            "_custom_panel": {
+                "name": "pilot-panel",
+                "js_url": PANEL_MODULE_URL,
+                "embed_iframe": False,
+                "trust_external": False,
+            }
+        },
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> bool:

@@ -1,6 +1,7 @@
 {
   "domain": "pilot",
   "name": "Pilot",
+  "after_dependencies": ["http", "frontend"],
   "codeowners": ["@Glukmann"],
   "config_flow": true,
   "documentation": "https://github.com/Glukmann/HA_Pilot",

@@ -1,18 +1,13 @@
 {
   "domain": "pilot",
   "name": "Pilot",
-  "codeowners": [
-    "@Glukmann"
-  ],
+  "after_dependencies": ["http", "frontend"],
+  "codeowners": ["@Glukmann"],
   "config_flow": true,
   "documentation": "https://github.com/Glukmann/HA_Pilot",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Glukmann/HA_Pilot/issues",
   "requirements": [],
-  "version": "0.1.0",
-  "after_dependencies": [
-    "http",
-    "frontend"
-  ]
+  "version": "0.1.0"
 }

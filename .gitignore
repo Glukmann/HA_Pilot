@@ -4,3 +4,11 @@ AGENTS.md
 
 # Local tool state
 .kimi-code/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

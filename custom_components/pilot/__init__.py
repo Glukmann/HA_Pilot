@@ -25,6 +25,7 @@ from .const import DOMAIN
 from .coordinator import PilotConfigEntry, PilotDataUpdateCoordinator
 from .notify import async_setup_notify
 from .repairs import async_sync_repairs_issue
+from .vitrine_push import async_setup_vitrine_push
 from .websocket_api import async_register_commands
 
 PLATFORMS: list[Platform] = [
@@ -69,6 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> boo
     async_register_commands(hass)
     await async_register_panel(hass)
     await async_setup_notify(hass, entry)
+    await async_setup_vitrine_push(hass, entry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

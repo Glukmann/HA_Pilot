@@ -43,11 +43,15 @@ VITRINE_MAX_AGE_S = 60
 
 @dataclass
 class VitrineState:
-    """Last known home data snapshot (the 'vitrine')."""
+    """Last known home data snapshot (the 'vitrine').
 
-    lines: list[str] = field(default_factory=list)
+    States are pushed by the HA integration (the integration IS HA, so no
+    token is ever needed); the addon renders the human-readable card.
+    """
+
+    states: dict[str, dict[str, Any]] = field(default_factory=dict)
     last_event_ts: float = 0.0
-    ws_ok: bool = False
+    connected: bool = False
 
     @property
     def age_s(self) -> float:
@@ -57,10 +61,28 @@ class VitrineState:
 
     @property
     def fresh(self) -> bool:
-        return self.ws_ok and self.age_s <= VITRINE_MAX_AGE_S
+        return self.connected and self.age_s <= VITRINE_MAX_AGE_S
+
+    @property
+    def lines(self) -> list[str]:
+        """Render one human-readable fact per entity."""
+        lines = []
+        for eid, sample in sorted(self.states.items()):
+            name = sample.get("attrs", {}).get("friendly_name") or eid
+            state = sample.get("state", "?")
+            lines.append(f"{name}: {state}")
+        return lines
+
+    def update(self, states: dict[str, dict[str, Any]]) -> None:
+        """Merge a pushed batch of entity states."""
+        now = time.time()
+        for eid, sample in states.items():
+            self.states[eid] = sample
+        self.last_event_ts = now
+        self.connected = True
 
     def as_dict(self) -> dict[str, Any]:
-        return {"fresh": self.fresh, "lines": list(self.lines)}
+        return {"fresh": self.fresh, "lines": self.lines}
 
 
 class RuntimeState:

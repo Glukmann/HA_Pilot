@@ -50,9 +50,19 @@ async def test_contract_roundtrip(tmp_path, hass, socket_enabled):
     await client.async_confirm(item_id, "yes")
     assert await client.async_get_queue() == []
 
+    await client.async_push_vitrine(
+        {
+            "light.office": {
+                "state": "on",
+                "attrs": {"friendly_name": "Office light"},
+            },
+            "sensor.temp": {"state": "22.4", "attrs": {}},
+        }
+    )
     vitrine = await client.async_get_vitrine()
-    assert vitrine["fresh"] is False  # no HA connection yet
-    assert vitrine["lines"] == []
+    assert vitrine["fresh"] is True  # push just arrived
+    assert "Office light: on" in vitrine["lines"]
+    assert "sensor.temp: 22.4" in vitrine["lines"]
 
     await client.async_reset("learning")
     await runner.cleanup()

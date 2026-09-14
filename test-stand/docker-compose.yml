@@ -1,0 +1,32 @@
+# Clean test stand: Home Assistant Container + Pilot add-on container.
+# Isolated from any real home. No Supervisor here, so the integration is
+# configured via the manual user step (host/port) instead of hassio discovery.
+
+services:
+  ha:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: pilot-test-ha
+    privileged: true
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./ha-config:/config
+      - ../custom_components:/config/custom_components:ro
+    environment:
+      - TZ=Europe/Moscow
+
+  pilot-addon:
+    build:
+      context: ../pilot-addon
+    image: pilot-addon:test
+    container_name: pilot-test-addon
+    restart: unless-stopped
+    ports:
+      - "8899:8899"
+    environment:
+      - HA_WS=ws://ha:8123/api/websocket
+      - HA_TOKEN=${HA_TOKEN:-}
+      - PILOT_DATA=/data
+    volumes:
+      - ./addon-data:/data

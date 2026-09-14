@@ -26,6 +26,8 @@ DATA_DIR = Path(os.environ.get("PILOT_DATA", "/data"))
 def build_state(data_dir: Path = DATA_DIR) -> RuntimeState:
     """Compose runtime state with the trust layer attached."""
     state = RuntimeState(str(data_dir), token=os.environ.get("PILOT_TOKEN", ""))
+    if budget := os.environ.get("PILOT_DAILY_BUDGET"):
+        state.daily_budget = float(budget)
     audit = AuditLog(data_dir / "logs" / "audit.jsonl")
     rollback = RollbackRegistry()
 

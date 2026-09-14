@@ -2,9 +2,9 @@
 
 from unittest.mock import AsyncMock, patch
 
-from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 from homeassistant.config_entries import SOURCE_HASSIO, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 
 from custom_components.pilot.const import DOMAIN
 
@@ -23,7 +23,8 @@ async def test_user_flow_success(hass):
             new=AsyncMock(),
         ),
         patch(
-            "custom_components.pilot.async_setup_entry", new=AsyncMock(return_value=True)
+            "custom_components.pilot.async_setup_entry",
+            new=AsyncMock(return_value=True),
         ),
     ):
         result = await hass.config_entries.flow.async_init(
@@ -48,7 +49,8 @@ async def test_user_flow_duplicate_abort(hass):
             new=AsyncMock(),
         ),
         patch(
-            "custom_components.pilot.async_setup_entry", new=AsyncMock(return_value=True)
+            "custom_components.pilot.async_setup_entry",
+            new=AsyncMock(return_value=True),
         ),
     ):
         result = await hass.config_entries.flow.async_init(
@@ -123,7 +125,8 @@ async def test_hassio_discovery_abort_already_configured(hass):
             new=AsyncMock(),
         ),
         patch(
-            "custom_components.pilot.async_setup_entry", new=AsyncMock(return_value=True)
+            "custom_components.pilot.async_setup_entry",
+            new=AsyncMock(return_value=True),
         ),
     ):
         result = await hass.config_entries.flow.async_init(

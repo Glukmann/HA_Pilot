@@ -1,11 +1,8 @@
 """Test the Pilot runtime API client."""
 
-from unittest.mock import AsyncMock, patch
-
-import pytest
 from aiohttp import ClientError
-
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import pytest
 
 from custom_components.pilot.api import PilotApiClient
 from custom_components.pilot.const import CannotConnect, PilotApiError

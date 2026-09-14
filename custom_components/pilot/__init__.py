@@ -3,21 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from homeassistant.components.frontend import async_register_built_in_panel
-
-if TYPE_CHECKING:
-    from homeassistant.components.http import StaticPathConfig
-else:
-    try:
-        from homeassistant.components.http import (  # type: ignore[no-redef]
-            StaticPathConfig,
-        )
-    except ImportError:  # newer HA moved it
-        from homeassistant.components.http.static import (  # type: ignore[attr-defined]
-            StaticPathConfig,
-        )
+from homeassistant.components.http.server import StaticPathConfig
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 

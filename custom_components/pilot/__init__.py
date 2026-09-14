@@ -1,0 +1,44 @@
+"""The Pilot integration — proactive AI agent for Home Assistant."""
+
+from __future__ import annotations
+
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+
+from .coordinator import PilotConfigEntry, PilotDataUpdateCoordinator
+from .repairs import async_sync_repairs_issue
+
+PLATFORMS: list[Platform] = [Platform.SENSOR]
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: PilotConfigEntry) -> None:
+    """Reload on config entry updates."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> bool:
+    """Set up Pilot from a config entry."""
+    coordinator = PilotDataUpdateCoordinator(hass, entry)
+    # Soft degradation: never fail setup when the runtime is down — the home
+    # keeps working as plain HA; only Pilot features pause (see repairs issue).
+    await coordinator.async_refresh()
+    entry.runtime_data = coordinator
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    entry.async_on_unload(
+        coordinator.async_add_listener(
+            lambda: async_sync_repairs_issue(
+                hass, entry.entry_id, not coordinator.last_update_success
+            )
+        )
+    )
+    async_sync_repairs_issue(hass, entry.entry_id, not coordinator.last_update_success)
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> bool:
+    """Unload a config entry."""
+    async_sync_repairs_issue(hass, entry.entry_id, False)
+    return bool(await hass.config_entries.async_unload_platforms(entry, PLATFORMS))

@@ -3,8 +3,6 @@ set -e
 
 export PILOT_DATA="/data"
 export PORT="8899"
-export HA_WS="ws://homeassistant:8123/api/websocket"
-export HA_TOKEN="$(bashio::config 'ha_token')"
 export PILOT_DAILY_BUDGET="$(bashio::config 'daily_budget')"
 export PILOT_TOKEN=""
 export PYTHONPATH="/app"

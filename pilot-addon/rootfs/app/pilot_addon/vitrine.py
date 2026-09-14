@@ -43,7 +43,7 @@ class VitrineMirror:
                 await self._run_once()
                 backoff = 1
             except Exception:
-                self.state.vitrine.ws_ok = False
+                self.state.vitrine.connected = False
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60)
 
@@ -66,7 +66,7 @@ class VitrineMirror:
                         "entity_ids": self.entities or [],
                     }
                     await ws.send(json.dumps(sub))
-                    self.state.vitrine.ws_ok = True
+                    self.state.vitrine.connected = True
                 elif msg.get("id") == 1:
                     self._apply(msg)
                     self._write_card()
@@ -78,7 +78,7 @@ class VitrineMirror:
         # Vitrine lines derive from the configured entity map in data/pilot.yaml;
         # the mirror stores raw states and refreshes line rendering.
         self.state.vitrine.last_event_ts = time.time()
-        self.state.vitrine.ws_ok = True
+        self.state.vitrine.connected = True
 
     def _write_card(self) -> None:
         if not self.out_file:

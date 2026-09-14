@@ -88,6 +88,12 @@ class PilotApiClient:
         """Fetch the home data vitrine (snapshot text lines + freshness)."""
         return await self._request("GET", f"{API_PREFIX}/vitrine")
 
+    async def async_push_vitrine(self, states: dict[str, dict[str, Any]]) -> None:
+        """Push entity states to the runtime (the integration IS HA — no token)."""
+        await self._request(
+            "POST", f"{API_PREFIX}/vitrine/update", json={"states": states}
+        )
+
     async def _request(
         self, method: str, path: str, json: dict[str, Any] | None = None
     ) -> dict[str, Any]:

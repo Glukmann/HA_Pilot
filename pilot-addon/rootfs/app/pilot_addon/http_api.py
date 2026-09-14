@@ -109,6 +109,15 @@ def create_app(state: RuntimeState) -> web.Application:
     async def vitrine(request: web.Request) -> web.Response:
         return web.json_response(state.vitrine.as_dict())
 
+    async def vitrine_update(request: web.Request) -> web.Response:
+        """Receive a state push from the HA integration (token-free, local)."""
+        body = await request.json()
+        states = body.get("states")
+        if not isinstance(states, dict):
+            return web.json_response({"error": "states required"}, status=400)
+        state.vitrine.update(states)
+        return web.json_response({"ok": True, "entities": len(states)})
+
     app.router.add_get("/api/validate", validate)
     app.router.add_get("/api/status", status)
     app.router.add_post("/api/persona", persona)
@@ -120,6 +129,7 @@ def create_app(state: RuntimeState) -> web.Application:
     app.router.add_get("/api/queue", queue_get)
     app.router.add_post("/api/queue/confirm", queue_confirm)
     app.router.add_get("/api/vitrine", vitrine)
+    app.router.add_post("/api/vitrine/update", vitrine_update)
     return app
 
 

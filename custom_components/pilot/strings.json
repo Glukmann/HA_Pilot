@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Pilot runtime",
+        "description": "Enter the address of the Pilot add-on or a remote Pilot instance.",
+        "data": {
+          "runtime_host": "Runtime host",
+          "runtime_port": "Runtime port",
+          "runtime_token": "Access token (optional)"
+        }
+      },
+      "hassio_confirm": {
+        "title": "Pilot add-on discovered",
+        "description": "The Pilot add-on was discovered on this system. Confirm to add it."
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the Pilot runtime. Check host, port and token."
+    },
+    "abort": {
+      "already_configured": "Pilot is already configured."
+    }
+  },
+  "issues": {
+    "runtime_unreachable": {
+      "title": "Pilot runtime is unreachable",
+      "description": "Home Assistant cannot reach the Pilot runtime. The add-on may be stopped, or the configured host/port is wrong. Home automation keeps working; only Pilot features are paused. This issue clears itself once the runtime is back."
+    }
+  }
+}

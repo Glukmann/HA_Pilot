@@ -2,11 +2,12 @@
 
 ## Pilot (this repository)
 
-Pilot is released under the **MIT License** (see [LICENSE](LICENSE)).
-
-The project is open-source; donations (including crypto) are the default
-funding model. Monetization decisions are deliberately deferred until the
-product has proven its value.
+Pilot is released under the **Pilot Personal-Use License v1.0** (see
+[LICENSE](LICENSE)): free for personal, non-commercial use; commercial use
+and any collaboration require prior written permission from the copyright
+holder (Andrey Lipanov — via
+[GitHub](https://github.com/Glukmann) or
+[LinkedIn](https://www.linkedin.com/in/andrey-lipanov-5a3481122/)).
 
 ## Runtime and third-party components
 

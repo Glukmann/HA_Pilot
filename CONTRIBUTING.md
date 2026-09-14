@@ -23,4 +23,4 @@ merged by the owner. Opening a PR does not guarantee merge; large changes are
 best discussed in an issue first.
 
 By contributing, you agree that your contributions are licensed under the
-project's MIT License.
+project's Pilot Personal-Use License (see LICENSE).

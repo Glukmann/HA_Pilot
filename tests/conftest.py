@@ -1,7 +1,14 @@
 """Fixtures for Pilot tests."""
 
+from pathlib import Path
+import sys
+
 from homeassistant.setup import async_setup_component
 import pytest
+
+ADDON_APP = str(Path(__file__).parent.parent / "pilot-addon" / "rootfs" / "app")
+if ADDON_APP not in sys.path:
+    sys.path.insert(0, ADDON_APP)
 
 
 @pytest.fixture(autouse=True)

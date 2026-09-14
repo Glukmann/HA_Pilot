@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -40,9 +40,7 @@ class PilotDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             config_entry=entry,
             name=DOMAIN,
             update_interval=timedelta(
-                seconds=entry.options.get(
-                    "scan_interval", DEFAULT_SCAN_INTERVAL
-                )
+                seconds=entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
             ),
         )
         self.api = PilotApiClient(

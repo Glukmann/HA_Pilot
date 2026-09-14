@@ -5,12 +5,11 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-import voluptuous as vol
-
 from homeassistant import config_entries
-from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service_info.hassio import HassioServiceInfo
+import voluptuous as vol
 
 from .api import PilotApiClient
 from .const import (
@@ -75,11 +74,11 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_RUNTIME_TOKEN, default=""): str,
             }
         )
-        return self.async_show_form(
-            step_id="user", data_schema=schema, errors=errors
-        )
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
-    async def async_step_hassio(self, discovery_info: HassioServiceInfo) -> ConfigFlowResult:
+    async def async_step_hassio(
+        self, discovery_info: HassioServiceInfo
+    ) -> ConfigFlowResult:
         """Handle Supervisor discovery of the Pilot add-on."""
         self._async_set_unique_id_and_abort_if_configured()
         self._hassio_data = {
@@ -96,11 +95,13 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
         assert self._hassio_data is not None
         if user_input is not None:
             return self.async_create_entry(title="Pilot", data=self._hassio_data)
-        return self.async_show_form(step_id="hassio_confirm", data_schema=vol.Schema({}))
+        return self.async_show_form(
+            step_id="hassio_confirm", data_schema=vol.Schema({})
+        )
 
     @staticmethod
     def async_get_options_flow(
-        config_entry: ConfigFlow,
+        config_entry: config_entries.ConfigEntry,
     ) -> PilotOptionsFlowHandler:
         """Return the options flow handler."""
         return PilotOptionsFlowHandler()
@@ -109,20 +110,16 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
 class PilotOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle Pilot options (e.g. polling interval)."""
 
-    def __init__(self) -> None:
-        """Initialize options flow state."""
-        self._entry: config_entries.ConfigEntry | None = None
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
+        entry = self.config_entry
+        assert entry is not None
         if user_input is not None:
             coordinator: PilotDataUpdateCoordinator | None = (
-                self.hass.config_entries.async_get_entry(
-                    self.config_entry.entry_id
-                ).runtime_data
-                if self.config_entry.state == config_entries.ConfigEntryState.LOADED
+                entry.runtime_data
+                if entry.state == config_entries.ConfigEntryState.LOADED
                 else None
             )
             if coordinator is not None:
@@ -131,14 +128,12 @@ class PilotOptionsFlowHandler(config_entries.OptionsFlow):
                 )
             return self.async_create_entry(data=user_input)
 
-        current = self.config_entry.options.get(
-            "scan_interval", DEFAULT_SCAN_INTERVAL
-        )
+        current = entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
         schema = vol.Schema(
             {
-                vol.Required(
-                    "scan_interval", default=current
-                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+                vol.Required("scan_interval", default=current): vol.All(
+                    vol.Coerce(int), vol.Range(min=10, max=300)
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

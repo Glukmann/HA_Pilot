@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DEFAULT_SCAN_INTERVAL
 from .coordinator import PilotConfigEntry, PilotDataUpdateCoordinator
 from .repairs import async_sync_repairs_issue
 

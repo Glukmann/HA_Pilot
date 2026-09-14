@@ -10,9 +10,7 @@ from .coordinator import PilotConfigEntry
 
 
 @callback
-def async_register(
-    hass: HomeAssistant, register: SystemHealthRegistration
-) -> None:
+def async_register(hass: HomeAssistant, register: SystemHealthRegistration) -> None:
     """Register system health callbacks."""
     register.async_register_info(system_health_info)
 

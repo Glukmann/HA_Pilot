@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -39,7 +39,7 @@ class PilotStatusSensor(CoordinatorEntity[PilotDataUpdateCoordinator], SensorEnt
             name="Pilot",
             manufacturer="Pilot",
             model="Proactive home agent",
-            entry_type="service",
+            entry_type=DeviceEntryType.SERVICE,
         )
 
     @property

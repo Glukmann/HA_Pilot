@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
@@ -56,10 +55,10 @@ class PilotApiClient:
                 resp.raise_for_status()
                 if resp.status == 204:
                     return {}
-                return await resp.json()
+                return cast(dict[str, Any], await resp.json())
         except ClientResponseError as err:
             if err.status == 401:
                 raise CannotConnect("invalid token") from err
             raise PilotApiError(f"HTTP {err.status} from runtime") from err
-        except (ClientError, asyncio.TimeoutError) as err:
+        except (TimeoutError, ClientError) as err:
             raise CannotConnect(str(err)) from err

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
+from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import issue_registry as ir
 
 from .const import DOMAIN
@@ -16,9 +17,15 @@ class RuntimeUnreachableFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
-    ) -> dict:
+    ) -> FlowResult:
         """Show issue details; the issue clears itself once the runtime is back."""
         return self.async_show_form(step_id="confirm")
+
+    async def async_step_confirm(
+        self, user_input: dict[str, str] | None = None
+    ) -> FlowResult:
+        """Acknowledge; the issue is resolved automatically by the integration."""
+        return self.async_abort(reason="resolved_when_runtime_back")
 
 
 async def async_create_fix_flow(

@@ -72,3 +72,10 @@ development.
 
 See [GOALS.md](GOALS.md) for product goals and [LICENSES.md](LICENSES.md) for
 licensing.
+
+## Author
+
+Pilot is developed and maintained by
+[Andrey Lipanov](https://www.linkedin.com/in/andrey-lipanov-5a3481122/).
+Ideas, questions, and collaboration offers — via
+[Issues](https://github.com/Glukmann/HA_Pilot/issues) or LinkedIn.

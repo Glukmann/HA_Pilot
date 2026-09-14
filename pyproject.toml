@@ -22,5 +22,6 @@ known-first-party = ["custom_components"]
 python_version = "3.14"
 strict = true
 mypy_path = "custom_components"
-files = "custom_components/pilot"
+files = "custom_components/pilot, pilot-addon/rootfs/app/pilot_addon"
 ignore_missing_imports = true
+explicit_package_bases = true

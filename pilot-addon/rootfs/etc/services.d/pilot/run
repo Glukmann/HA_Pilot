@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv bashio
+set -e
+
+export PILOT_DATA="/data"
+export PORT="8899"
+export HA_WS="${HA_WS:-ws://supervisor/core/api/websocket}"
+export HA_TOKEN="${SUPERVISOR_TOKEN:-}"
+export PILOT_TOKEN=""
+
+exec python3 -m pilot_addon.main

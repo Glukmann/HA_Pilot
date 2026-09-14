@@ -8,7 +8,14 @@ from homeassistant.core import HomeAssistant
 from .coordinator import PilotConfigEntry, PilotDataUpdateCoordinator
 from .repairs import async_sync_repairs_issue
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.BUTTON,
+    Platform.TEXT,
+]
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: PilotConfigEntry) -> None:
@@ -19,6 +26,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: PilotConfigEntry) -
 async def async_setup_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> bool:
     """Set up Pilot from a config entry."""
     coordinator = PilotDataUpdateCoordinator(hass, entry)
+    await coordinator.async_load_cache()
     # Soft degradation: never fail setup when the runtime is down — the home
     # keeps working as plain HA; only Pilot features pause (see repairs issue).
     await coordinator.async_refresh()

@@ -1,0 +1,6 @@
+# Internal plans and design documents (not public)
+docs/
+AGENTS.md
+
+# Local tool state
+.kimi-code/

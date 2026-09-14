@@ -22,4 +22,3 @@ schema:
   log_level: list(info|warning|error)?
   daily_budget: float
   ha_token: str
-image: ghcr.io/glukmann/pilot-addon/{arch}

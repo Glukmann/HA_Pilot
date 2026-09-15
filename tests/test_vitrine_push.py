@@ -1,9 +1,36 @@
 """Test the vitrine push from the integration into the runtime."""
 
 import asyncio
+import threading
 
 from .test_entities import FULL_STATUS, _post_mocks
 from .test_integration import _mock_api, _setup_entry
+
+
+async def test_state_change_from_foreign_thread_still_pushes(hass, aioclient_mock):
+    """Bus listeners may fire from a non-loop thread; scheduling must survive it.
+
+    A misbehaving integration can call async_set from the wrong thread — the
+    listener must hop onto the HA loop instead of crashing loop.create_task
+    (RuntimeError: Non-thread-safe operation).
+    """
+    _mock_api(aioclient_mock, payload=FULL_STATUS)
+    await _setup_entry(hass, aioclient_mock)
+    _post_mocks(aioclient_mock)
+    aioclient_mock.post("http://pilot:8899/api/vitrine/update", status=200, json={})
+
+    thread = threading.Thread(
+        target=hass.states.async_set,
+        args=("light.office", "on", {"friendly_name": "Office"}),
+    )
+    thread.start()
+    thread.join()
+    await asyncio.sleep(2.5)  # debounce window
+    await hass.async_block_till_done()
+
+    pushes = [c for c in aioclient_mock.mock_calls if "vitrine/update" in str(c[1])]
+    assert len(pushes) == 1
+    assert pushes[0][2]["states"]["light.office"]["state"] == "on"
 
 
 async def test_state_changes_push_to_runtime(hass, aioclient_mock):

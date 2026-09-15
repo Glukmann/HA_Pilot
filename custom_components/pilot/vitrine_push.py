@@ -46,8 +46,16 @@ async def async_setup_vitrine_push(
 
     def _schedule_flush() -> None:
         nonlocal task
-        if task is None or task.done():
-            task = hass.loop.create_task(_delayed_flush())
+
+        def _create() -> None:
+            nonlocal task
+            if task is None or task.done():
+                task = hass.loop.create_task(_delayed_flush())
+
+        # State listeners can fire from a worker thread (HA schedules state
+        # changes through executors); asyncio loop handles may only be touched
+        # from the loop thread, so hop on via call_soon_threadsafe.
+        hass.loop.call_soon_threadsafe(_create)
 
     def _on_state_change(event: Event[EventStateChangedData]) -> None:
         state = event.data["new_state"]

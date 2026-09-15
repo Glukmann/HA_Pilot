@@ -37,7 +37,7 @@ async def test_user_flow_success(hass):
             result["flow_id"], USER_INPUT
         )
         assert result["type"] is FlowResultType.CREATE_ENTRY
-        assert result["title"] == "Pilot"
+        assert result["title"] == "Pilot Eyes"
         assert result["data"] == USER_INPUT
 
 

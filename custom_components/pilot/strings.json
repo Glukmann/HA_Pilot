@@ -19,7 +19,7 @@
       "cannot_connect": "Cannot connect to the Pilot runtime. Check host, port and token."
     },
     "abort": {
-      "already_configured": "Pilot is already configured."
+      "already_configured": "Pilot Eyes is already configured."
     }
   },
   "issues": {

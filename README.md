@@ -29,7 +29,7 @@ Pilot ставится двумя частями из одного репози�
 1. HACS → **Интеграции** → меню **⋮** → **Пользовательские репозитории**.
 2. URL: `https://github.com/Glukmann/HA_Pilot`, категория: **Интеграция** →
    **Добавить**.
-3. Найти **Pilot** в списке → **Скачать** → перезапустить Home Assistant
+3. Найти **Pilot Eyes** в списке → **Скачать** → перезапустить Home Assistant
    (HACS предложит сам).
 
 **Вариант Б. Вручную**
@@ -58,12 +58,13 @@ Pilot ставится двумя частями из одного репози�
 Когда аддон запущен, он **объявляет себя** Home Assistant автоматически:
 
 1. **Настройки** → **Устройства и службы** → в разделе «Обнаружено»
-   появится **Pilot** → **Подтвердить** → **Готово**.
-2. Устройство «Pilot» появится в списке устройств — со статусом агента,
+   появится **Pilot** (аддон) → **Подтвердить** → **Готово**. В списке
+   интеграций появится **Pilot Eyes**.
+2. Устройство «Pilot Eyes» появится в списке устройств — со статусом агента,
    очередью подтверждений, шкалами персоны и ссылкой на панель.
 
 Если обнаружение не сработало (например, аддон запущен вне Supervisor):
-**Добавить интеграцию** → **Pilot** → ввести вручную:
+**Добавить интеграцию** → **Pilot Eyes** → ввести вручную:
 
 - **Хост** — имя аддона в сети Supervisor, например `94eaa3d6-pilot`;
 - **Порт** — `8899`.
@@ -72,7 +73,7 @@ Pilot ставится двумя частями из одного репози�
 
 - **Аддон:** Магазин дополнений → карточка Pilot → кнопка **Обновить** при
   выходе новой версии. Что нового — на вкладке **Changelog** в интерфейсе.
-- **Интеграция (HACS):** HACS → Интеграции → Pilot → **Обновить** →
+- **Интеграция (HACS):** HACS → Интеграции → Pilot Eyes → **Обновить** →
   перезапуск HA.
 - **Интеграция (вручную):** повторить вариант Б шага 1 поверх существующей
   папки → перезапуск HA.
@@ -92,7 +93,7 @@ Pilot ставится двумя частями из одного репози�
 
 ### Удаление
 
-1. Настройки → Устройства и службы → Pilot → **Удалить**.
+1. Настройки → Устройства и службы → Pilot Eyes → **Удалить**.
 2. Дополнения → Pilot → **Остановить** → **Удалить** (опционально убрать
    репозиторий из списка репозиториев магазина).
 
@@ -140,7 +141,7 @@ Pilot ships as two artifacts of one repository, following the ESPHome /
 Music Assistant pattern:
 
 - **`custom_components/pilot`** — a native Home Assistant custom integration:
-  one "Pilot" device with entities (status, daily cost, suggestion queue,
+  one "Pilot Eyes" device with entities (status, daily cost, suggestion queue,
   persona sliders, presets, reset buttons), a native sidebar panel for daily
   use, a conversation agent in the Assist pipeline with deterministic handling
   of simple intents, services for automations, repairs/diagnostics/system

@@ -1,5 +1,5 @@
 name: Pilot
-version: 0.4.5
+version: 0.5.0
 slug: pilot
 description: Proactive AI agent for Home Assistant — goal supervisor, data vitrine, trust loop. Powered by OpenClaw.
 url: https://github.com/Glukmann/HA_Pilot
@@ -10,6 +10,10 @@ arch:
   - amd64
   - aarch64
 homeassistant_api: true
+ingress: true
+ingress_port: 8899
+panel_icon: mdi:tools
+panel_title: Мастерская
 discovery:
   - pilot
 ports:

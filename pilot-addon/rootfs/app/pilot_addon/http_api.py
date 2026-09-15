@@ -14,17 +14,19 @@ Endpoints (see custom_components/pilot/api.py):
     GET  /api/vitrine
     POST /api/vitrine/update
     WS   /ws               workshop SPA protocol (see ws_api.py)
+    GET  /{anything}       workshop SPA static files (see workshop_static.py)
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 
-from . import ws_api
+from . import workshop_static, ws_api
 from .logbuffer import LogBuffer, RingBufferHandler
 from .state import RuntimeState
 
@@ -37,8 +39,14 @@ def _auth_ok(request: web.Request, state: RuntimeState) -> bool:
     return auth == f"Bearer {state.token}"
 
 
-def create_app(state: RuntimeState) -> web.Application:
-    """Build the aiohttp application serving the contract."""
+def create_app(
+    state: RuntimeState, workshop_dir: Path | None = None
+) -> web.Application:
+    """Build the aiohttp application serving the contract.
+
+    workshop_dir overrides the workshop SPA dist location (tests, local
+    dev); the default is the workshop_dist dir baked into the image.
+    """
     app = web.Application()
     app["state"] = state
 
@@ -152,6 +160,9 @@ def create_app(state: RuntimeState) -> web.Application:
     app.router.add_post("/api/queue/confirm", queue_confirm)
     app.router.add_get("/api/vitrine", vitrine)
     app.router.add_post("/api/vitrine/update", vitrine_update)
+    # Catch-all last: the SPA route matches every GET, so the contract
+    # routes above must already be registered to keep winning.
+    workshop_static.attach_workshop(app, workshop_dir)
     return app
 
 

@@ -54,7 +54,7 @@ async def test_ws_status_command(addon) -> None:
             reply = await _rpc(ws, "status", {})
             assert reply["type"] == "status"
             payload = reply["payload"]
-            assert payload["runtime_version"] == "0.4.5"
+            assert payload["runtime_version"] == "0.5.0"
             assert payload["daily_budget"] == state.daily_budget
             assert payload["queue_size"] == 0
             assert payload["cost_today"] == 0.0

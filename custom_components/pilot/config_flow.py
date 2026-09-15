@@ -63,7 +63,7 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
             errors = await self._async_validate_or_error(user_input)
             if not errors:
                 await self._async_set_unique_id_and_abort_if_configured()
-                return self.async_create_entry(title="Pilot", data=user_input)
+                return self.async_create_entry(title="Pilot Eyes", data=user_input)
 
         schema = vol.Schema(
             {
@@ -96,7 +96,7 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
         """Confirm Supervisor-discovered add-on."""
         assert self._hassio_data is not None
         if user_input is not None:
-            return self.async_create_entry(title="Pilot", data=self._hassio_data)
+            return self.async_create_entry(title="Pilot Eyes", data=self._hassio_data)
         return self.async_show_form(
             step_id="hassio_confirm", data_schema=vol.Schema({})
         )

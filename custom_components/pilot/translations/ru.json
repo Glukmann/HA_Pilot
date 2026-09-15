@@ -19,7 +19,7 @@
       "cannot_connect": "Не удалось подключиться к рантайму Pilot. Проверьте хост, порт и токен."
     },
     "abort": {
-      "already_configured": "Pilot уже настроен."
+      "already_configured": "Pilot Eyes уже настроен."
     }
   },
   "issues": {

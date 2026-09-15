@@ -20,7 +20,7 @@ class PilotEntity(CoordinatorEntity[PilotDataUpdateCoordinator]):
         super().__init__(coordinator)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name="Pilot",
+            name="Pilot Eyes",
             manufacturer="Pilot",
             model="Proactive home agent",
             entry_type=DeviceEntryType.SERVICE,

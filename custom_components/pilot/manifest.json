@@ -1,6 +1,6 @@
 {
   "domain": "pilot",
-  "name": "Pilot",
+  "name": "Pilot Eyes",
   "after_dependencies": ["http", "frontend"],
   "codeowners": ["@Glukmann"],
   "config_flow": true,
@@ -9,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Glukmann/HA_Pilot/issues",
   "requirements": [],
-  "version": "0.1.1"
+  "version": "0.1.2"
 }

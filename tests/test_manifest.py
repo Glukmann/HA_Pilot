@@ -9,7 +9,7 @@ COMPONENT_DIR = Path(__file__).parent.parent / "custom_components" / "pilot"
 def test_manifest_valid():
     manifest = json.loads((COMPONENT_DIR / "manifest.json").read_text())
     assert manifest["domain"] == "pilot"
-    assert manifest["name"] == "Pilot"
+    assert manifest["name"] == "Pilot Eyes"
     assert manifest["config_flow"] is True
     assert manifest["iot_class"] == "local_polling"
     assert manifest["integration_type"] == "hub"

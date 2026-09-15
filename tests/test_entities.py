@@ -42,15 +42,17 @@ def _post_mocks(aioclient_mock):
 async def test_sensors_report_values(hass, aioclient_mock):
     """Test cost/suggestions sensors from the full snapshot."""
     await _setup_full(hass, aioclient_mock)
-    assert hass.states.get("sensor.pilot_cost_today").state == "1.25"
-    assert hass.states.get("sensor.pilot_pending_suggestions").state == "2"
+    assert hass.states.get("sensor.pilot_eyes_cost_today").state == "1.25"
+    assert hass.states.get("sensor.pilot_eyes_pending_suggestions").state == "2"
 
 
 async def test_binary_sensors_report_values(hass, aioclient_mock):
     """Test freshness and confirmation binary sensors."""
     await _setup_full(hass, aioclient_mock)
-    assert hass.states.get("binary_sensor.pilot_data_fresh").state == "on"
-    assert hass.states.get("binary_sensor.pilot_awaiting_confirmation").state == "on"
+    assert hass.states.get("binary_sensor.pilot_eyes_data_fresh").state == "on"
+    assert (
+        hass.states.get("binary_sensor.pilot_eyes_awaiting_confirmation").state == "on"
+    )
 
 
 async def test_data_fresh_off_when_stale(hass, aioclient_mock):
@@ -58,19 +60,19 @@ async def test_data_fresh_off_when_stale(hass, aioclient_mock):
     stale = {**FULL_STATUS, "vitrine_age_s": 300}
     _mock_api(aioclient_mock, payload=stale)
     await _setup_entry(hass, aioclient_mock)
-    assert hass.states.get("binary_sensor.pilot_data_fresh").state == "off"
+    assert hass.states.get("binary_sensor.pilot_eyes_data_fresh").state == "off"
 
 
 async def test_persona_sliders_from_snapshot_and_write(hass, aioclient_mock):
     """Test slider values and write-through to the runtime."""
     entry = await _setup_full(hass, aioclient_mock)
-    assert hass.states.get("number.pilot_persona_butler_observer").state == "70.0"
+    assert hass.states.get("number.pilot_eyes_persona_butler_observer").state == "70.0"
 
     _post_mocks(aioclient_mock)
     await hass.services.async_call(
         "number",
         "set_value",
-        {"entity_id": "number.pilot_persona_butler_observer", "value": 20},
+        {"entity_id": "number.pilot_eyes_persona_butler_observer", "value": 20},
         blocking=True,
     )
     assert entry.runtime_data.persona_cache["persona"]["butler_observer"] == 20
@@ -86,7 +88,7 @@ async def test_daily_budget_write(hass, aioclient_mock):
     await hass.services.async_call(
         "number",
         "set_value",
-        {"entity_id": "number.pilot_daily_budget", "value": 25},
+        {"entity_id": "number.pilot_eyes_daily_budget", "value": 25},
         blocking=True,
     )
     assert entry.runtime_data.persona_cache["daily_budget"] == 25.0
@@ -97,14 +99,14 @@ async def test_daily_budget_write(hass, aioclient_mock):
 async def test_selects_report_and_write(hass, aioclient_mock):
     """Test preset/mode selects from snapshot and write-through."""
     entry = await _setup_full(hass, aioclient_mock)
-    assert hass.states.get("select.pilot_persona_preset").state == "butler"
-    assert hass.states.get("select.pilot_home_mode").state == "normal"
+    assert hass.states.get("select.pilot_eyes_persona_preset").state == "butler"
+    assert hass.states.get("select.pilot_eyes_home_mode").state == "normal"
 
     _post_mocks(aioclient_mock)
     await hass.services.async_call(
         "select",
         "select_option",
-        {"entity_id": "select.pilot_home_mode", "option": "vacation"},
+        {"entity_id": "select.pilot_eyes_home_mode", "option": "vacation"},
         blocking=True,
     )
     assert entry.runtime_data.persona_cache["mode"] == "vacation"
@@ -119,7 +121,7 @@ async def test_reset_buttons_call_runtime(hass, aioclient_mock):
     await hass.services.async_call(
         "button",
         "press",
-        {"entity_id": "button.pilot_reset_learning"},
+        {"entity_id": "button.pilot_eyes_reset_learning"},
         blocking=True,
     )
     assert aioclient_mock.mock_calls[-1][2] == {"target": "learning"}
@@ -127,7 +129,7 @@ async def test_reset_buttons_call_runtime(hass, aioclient_mock):
     await hass.services.async_call(
         "button",
         "press",
-        {"entity_id": "button.pilot_reset_all"},
+        {"entity_id": "button.pilot_eyes_reset_all"},
         blocking=True,
     )
     assert aioclient_mock.mock_calls[-1][2] == {"target": "all"}
@@ -136,12 +138,14 @@ async def test_reset_buttons_call_runtime(hass, aioclient_mock):
 async def test_current_focus_text_write(hass, aioclient_mock):
     """Test text entity writes focus to the runtime."""
     entry = await _setup_full(hass, aioclient_mock)
-    assert hass.states.get("text.pilot_current_focus").state == ("Night energy savings")
+    assert hass.states.get("text.pilot_eyes_current_focus").state == (
+        "Night energy savings"
+    )
     _post_mocks(aioclient_mock)
     await hass.services.async_call(
         "text",
         "set_value",
-        {"entity_id": "text.pilot_current_focus", "value": "Morning comfort"},
+        {"entity_id": "text.pilot_eyes_current_focus", "value": "Morning comfort"},
         blocking=True,
     )
     assert entry.runtime_data.persona_cache["current_focus"] == "Morning comfort"
@@ -149,7 +153,7 @@ async def test_current_focus_text_write(hass, aioclient_mock):
 
 
 async def test_all_entities_on_one_device(hass, aioclient_mock):
-    """Test every entity belongs to the single 'Pilot' device."""
+    """Test every entity belongs to the single 'Pilot Eyes' device."""
     await _setup_full(hass, aioclient_mock)
     from homeassistant.helpers import entity_registry as er
 

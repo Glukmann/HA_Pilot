@@ -56,23 +56,23 @@ async def test_coordinator_failure_marks_unavailable(hass, aioclient_mock):
     coordinator = entry.runtime_data
     assert coordinator.last_update_success is False
 
-    state = hass.states.get("sensor.pilot_status")
+    state = hass.states.get("sensor.pilot_eyes_status")
     assert state is not None
     assert state.state == "unavailable"
 
 
 async def test_sensor_reports_status_and_attributes(hass, aioclient_mock):
-    """Test sensor.pilot_status value and attributes from the snapshot."""
+    """Test sensor.pilot_eyes_status value and attributes from the snapshot."""
     _mock_api(aioclient_mock)
     await _setup_entry(hass, aioclient_mock)
 
-    state = hass.states.get("sensor.pilot_status")
+    state = hass.states.get("sensor.pilot_eyes_status")
     assert state.state == "ok"
     assert state.attributes["vitrine_age_s"] == 12
     assert state.attributes["queue_size"] == 2
     assert state.attributes["runtime_version"] == "0.1.0"
 
-    device = hass.states.get("sensor.pilot_status")
+    device = hass.states.get("sensor.pilot_eyes_status")
     assert device.attributes.get("friendly_name") is not None
 
 

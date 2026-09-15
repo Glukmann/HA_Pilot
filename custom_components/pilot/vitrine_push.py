@@ -13,10 +13,17 @@ import time
 from typing import Any
 
 from homeassistant.const import EVENT_STATE_CHANGED
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.start import async_at_started
 
 from .coordinator import PilotConfigEntry
 
@@ -103,15 +110,36 @@ async def async_setup_vitrine_push(
 
     entry.async_on_unload(_cancel_pending_flush)
 
-    def _on_state_change(event: Event[EventStateChangedData]) -> None:
-        state = event.data["new_state"]
-        if state is None or state.domain in IGNORED_DOMAINS:
+    def _seed_pending(state: State) -> None:
+        if state.domain in IGNORED_DOMAINS:
             return
         pending[state.entity_id] = {
             "state": state.state,
             "attrs": dict(state.attributes),
             "last_changed": time.time(),
         }
+
+    def _on_state_change(event: Event[EventStateChangedData]) -> None:
+        state = event.data["new_state"]
+        if state is None:
+            return
+        _seed_pending(state)
         _schedule_flush()
+
+    @callback
+    def _initial_snapshot(_hass: HomeAssistant) -> None:
+        """Push the full current state once HA is fully started.
+
+        The push model only captures deltas, so without this seed a fresh
+        install's vitrine starts nearly empty and only slowly accumulates
+        entities as they change.
+        """
+        for state in hass.states.async_all():
+            _seed_pending(state)
+        _schedule_flush()
+
+    # Seed after all integrations have set up their entities — seeding at
+    # setup time would miss states that appear later in the boot sequence.
+    entry.async_on_unload(async_at_started(hass, _initial_snapshot))
 
     entry.async_on_unload(hass.bus.async_listen(EVENT_STATE_CHANGED, _on_state_change))

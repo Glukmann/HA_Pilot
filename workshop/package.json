@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dist:hash": "bash scripts/dist-hash.sh > dist.sha256"
   },
   "dependencies": {
     "react": "^19.1.0",

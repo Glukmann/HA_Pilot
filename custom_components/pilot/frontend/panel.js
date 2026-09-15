@@ -1,52 +1,14 @@
 (() => {
-  var __create = Object.create;
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __knownSymbol = (name, symbol) => (symbol = Symbol[name]) ? symbol : Symbol.for("Symbol." + name);
-  var __typeError = (msg) => {
-    throw TypeError(msg);
+  var __decorateClass = (decorators, target, key, kind) => {
+    var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
+    for (var i5 = decorators.length - 1, decorator; i5 >= 0; i5--)
+      if (decorator = decorators[i5])
+        result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+    if (kind && result) __defProp(target, key, result);
+    return result;
   };
-  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-  var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
-  var __decoratorStart = (base) => [, , , __create(base?.[__knownSymbol("metadata")] ?? null)];
-  var __decoratorStrings = ["class", "method", "getter", "setter", "accessor", "field", "value", "get", "set"];
-  var __expectFn = (fn) => fn !== void 0 && typeof fn !== "function" ? __typeError("Function expected") : fn;
-  var __decoratorContext = (kind, name, done, metadata, fns) => ({ kind: __decoratorStrings[kind], name, metadata, addInitializer: (fn) => done._ ? __typeError("Already initialized") : fns.push(__expectFn(fn || null)) });
-  var __decoratorMetadata = (array, target) => __defNormalProp(target, __knownSymbol("metadata"), array[3]);
-  var __runInitializers = (array, flags, self, value) => {
-    for (var i5 = 0, fns = array[flags >> 1], n5 = fns && fns.length; i5 < n5; i5++) flags & 1 ? fns[i5].call(self) : value = fns[i5].call(self, value);
-    return value;
-  };
-  var __decorateElement = (array, flags, name, decorators, target, extra) => {
-    var fn, it, done, ctx, access, k2 = flags & 7, s4 = !!(flags & 8), p3 = !!(flags & 16);
-    var j = k2 > 3 ? array.length + 1 : k2 ? s4 ? 1 : 2 : 0, key = __decoratorStrings[k2 + 5];
-    var initializers = k2 > 3 && (array[j - 1] = []), extraInitializers = array[j] || (array[j] = []);
-    var desc = k2 && (!p3 && !s4 && (target = target.prototype), k2 < 5 && (k2 > 3 || !p3) && __getOwnPropDesc(k2 < 4 ? target : { get [name]() {
-      return __privateGet(this, extra);
-    }, set [name](x2) {
-      return __privateSet(this, extra, x2);
-    } }, name));
-    k2 ? p3 && k2 < 4 && __name(extra, (k2 > 2 ? "set " : k2 > 1 ? "get " : "") + name) : __name(target, name);
-    for (var i5 = decorators.length - 1; i5 >= 0; i5--) {
-      ctx = __decoratorContext(k2, name, done = {}, array[3], extraInitializers);
-      if (k2) {
-        ctx.static = s4, ctx.private = p3, access = ctx.access = { has: p3 ? (x2) => __privateIn(target, x2) : (x2) => name in x2 };
-        if (k2 ^ 3) access.get = p3 ? (x2) => (k2 ^ 1 ? __privateGet : __privateMethod)(x2, target, k2 ^ 4 ? extra : desc.get) : (x2) => x2[name];
-        if (k2 > 2) access.set = p3 ? (x2, y3) => __privateSet(x2, target, y3, k2 ^ 4 ? extra : desc.set) : (x2, y3) => x2[name] = y3;
-      }
-      it = (0, decorators[i5])(k2 ? k2 < 4 ? p3 ? extra : desc[key] : k2 > 4 ? void 0 : { get: desc.get, set: desc.set } : target, ctx), done._ = 1;
-      if (k2 ^ 4 || it === void 0) __expectFn(it) && (k2 > 4 ? initializers.unshift(it) : k2 ? p3 ? extra = it : desc[key] = it : target = it);
-      else if (typeof it !== "object" || it === null) __typeError("Object expected");
-      else __expectFn(fn = it.get) && (desc.get = fn), __expectFn(fn = it.set) && (desc.set = fn), __expectFn(fn = it.init) && initializers.unshift(fn);
-    }
-    return k2 || __decoratorMetadata(array, target), desc && __defProp(target, name, desc), p3 ? k2 ^ 4 ? extra : desc : target;
-  };
-  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-  var __accessCheck = (obj, member, msg) => member.has(obj) || __typeError("Cannot " + msg);
-  var __privateIn = (member, obj) => Object(obj) !== obj ? __typeError('Cannot use the "in" operator on this value') : member.has(obj);
-  var __privateGet = (obj, member, getter) => (__accessCheck(obj, member, "read from private field"), getter ? getter.call(obj) : member.get(obj));
-  var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
-  var __privateMethod = (obj, member, method) => (__accessCheck(obj, member, "access private method"), method);
 
   // node_modules/@lit/reactive-element/css-tag.js
   var t = globalThis;
@@ -641,17 +603,13 @@
   }
 
   // src/panel.ts
-  var __loading_dec, __vitrine_dec, __queue_dec, __status_dec, _hass_dec, _a, _PilotPanel_decorators, _init;
-  _PilotPanel_decorators = [t3("pilot-panel")];
-  var PilotPanel = class extends (_a = i4, _hass_dec = [n4({ attribute: false })], __status_dec = [r5()], __queue_dec = [r5()], __vitrine_dec = [r5()], __loading_dec = [r5()], _a) {
+  var PilotPanel = class extends i4 {
     constructor() {
       super(...arguments);
-      __publicField(this, "hass", __runInitializers(_init, 8, this)), __runInitializers(_init, 11, this);
-      __publicField(this, "_status", __runInitializers(_init, 12, this, {})), __runInitializers(_init, 15, this);
-      __publicField(this, "_queue", __runInitializers(_init, 16, this, [])), __runInitializers(_init, 19, this);
-      __publicField(this, "_vitrine", __runInitializers(_init, 20, this, {})), __runInitializers(_init, 23, this);
-      __publicField(this, "_loading", __runInitializers(_init, 24, this, true)), __runInitializers(_init, 27, this);
-      __publicField(this, "_timer");
+      this._status = {};
+      this._queue = [];
+      this._vitrine = {};
+      this._loading = true;
     }
     connectedCallback() {
       super.connectedCallback();
@@ -731,14 +689,7 @@
     `;
     }
   };
-  _init = __decoratorStart(_a);
-  __decorateElement(_init, 5, "hass", _hass_dec, PilotPanel);
-  __decorateElement(_init, 5, "_status", __status_dec, PilotPanel);
-  __decorateElement(_init, 5, "_queue", __queue_dec, PilotPanel);
-  __decorateElement(_init, 5, "_vitrine", __vitrine_dec, PilotPanel);
-  __decorateElement(_init, 5, "_loading", __loading_dec, PilotPanel);
-  PilotPanel = __decorateElement(_init, 0, "PilotPanel", _PilotPanel_decorators, PilotPanel);
-  __publicField(PilotPanel, "styles", i`
+  PilotPanel.styles = i`
     :host {
       display: block;
       padding: 16px;
@@ -776,8 +727,25 @@
       margin: 0;
     }
     .empty { color: var(--secondary-text-color); }
-  `);
-  __runInitializers(_init, 1, PilotPanel);
+  `;
+  __decorateClass([
+    n4({ attribute: false })
+  ], PilotPanel.prototype, "hass", 2);
+  __decorateClass([
+    r5()
+  ], PilotPanel.prototype, "_status", 2);
+  __decorateClass([
+    r5()
+  ], PilotPanel.prototype, "_queue", 2);
+  __decorateClass([
+    r5()
+  ], PilotPanel.prototype, "_vitrine", 2);
+  __decorateClass([
+    r5()
+  ], PilotPanel.prototype, "_loading", 2);
+  PilotPanel = __decorateClass([
+    t3("pilot-panel")
+  ], PilotPanel);
 })();
 /*! Bundled license information:
 

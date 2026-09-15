@@ -2,7 +2,7 @@
   "name": "pilot-panel",
   "private": true,
   "scripts": {
-    "build": "esbuild src/panel.ts --bundle --format=iife --target=es2022 --outfile=panel.js"
+    "build": "esbuild src/panel.ts --bundle --format=iife --target=es2022 --tsconfig=tsconfig.json --outfile=panel.js"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

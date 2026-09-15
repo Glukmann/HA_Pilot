@@ -91,10 +91,12 @@ class TrustQueue:
         self._whitelisted = whitelisted or (
             lambda action: action.get("type") in WHITELISTED_ACTIONS
         )
+        self.last_change_ts: float | None = None
 
     def propose(self, title: str, action: dict[str, Any], summary: str = "") -> str:
         """Add a proposal; auto-apply if whitelisted, else queue for yes/no."""
         item_id = uuid.uuid4().hex[:12]
+        self.last_change_ts = time.time()
         if self._whitelisted(action):
             self._apply(action, confirmed_by="whitelist")
             return item_id
@@ -109,6 +111,7 @@ class TrustQueue:
             if item.id != item_id:
                 continue
             self.items.remove(item)
+            self.last_change_ts = time.time()
             if decision == "yes":
                 self._apply(item.action, confirmed_by="owner")
             else:

@@ -18,7 +18,11 @@ services:
 
   pilot-addon:
     build:
-      context: ../pilot-addon
+      # The Dockerfile normalizes the context itself; building from the repo
+      # root includes the workshop SPA build stage (Supervisor source-builds
+      # from the addon folder alone build without the UI — by design).
+      context: ..
+      dockerfile: pilot-addon/Dockerfile
     image: pilot-addon:test
     container_name: pilot-test-addon
     restart: unless-stopped

@@ -56,3 +56,52 @@ jobs:
       - run: pip install -r requirements_test.txt homeassistant==${{ matrix.ha-version }}
         if: matrix.ha-version != 'latest'
       - run: pytest tests/ -v
+
+  workshop-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: workshop/package-lock.json
+      - name: Install workshop dependencies
+        run: npm ci
+        working-directory: workshop
+      - name: Typecheck and build workshop SPA
+        run: npm run build
+        working-directory: workshop
+
+  workshop-bundle-check:
+    # The add-on image builds the SPA from workshop/ sources; the committed
+    # workshop/dist.sha256 must match a fresh build, otherwise a stale bundle
+    # would silently ship. Regenerate after changing the frontend:
+    #   cd workshop && npm ci && npm run build && npm run dist:hash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: workshop/package-lock.json
+      - name: Install workshop dependencies
+        run: npm ci
+        working-directory: workshop
+      - name: Build workshop SPA
+        run: npm run build
+        working-directory: workshop
+      - name: Verify committed bundle hash
+        working-directory: workshop
+        run: |
+          actual="$(bash scripts/dist-hash.sh)"
+          expected="$(tr -d '[:space:]' < dist.sha256)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error title=Stale workshop bundle::dist.sha256 does not match a fresh build"
+            echo "Committed (dist.sha256): $expected"
+            echo "Fresh build:             $actual"
+            echo "Fix: cd workshop && npm ci && npm run build && npm run dist:hash, then commit dist.sha256"
+            exit 1
+          fi
+          echo "workshop bundle hash OK: $actual"

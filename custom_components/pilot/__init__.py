@@ -89,7 +89,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> boo
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
-    """Register the sidebar panel and its static frontend."""
+    """Register the sidebar panel and its static frontend (once per session).
+
+    Setup may run again without a prior unload — HA retries a failed setup,
+    the entry reloads on options changes — and ``async_register_built_in_panel``
+    raises ``ValueError: Overwriting panel`` on a duplicate registration,
+    which used to wedge the entry in SETUP_ERROR until an HA restart.
+    """
+    if hass.data.setdefault(DOMAIN, {}).get("panel_registered"):
+        return
     await hass.http.async_register_static_paths(
         [StaticPathConfig(STATIC_URL, str(FRONTEND_DIR), cache_headers=False)]
     )
@@ -112,6 +120,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
             }
         },
     )
+    hass.data[DOMAIN]["panel_registered"] = True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> bool:

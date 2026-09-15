@@ -149,3 +149,24 @@ async def test_mobile_action_confirms_oldest(hass, aioclient_mock):
     ]
     assert len(confirm_calls) == 1
     assert confirm_calls[0][2] == {"id": "q1", "decision": "yes"}
+
+
+async def test_reload_does_not_fail_on_panel_reregistration(hass, aioclient_mock):
+    """Regression: re-setup after unload used to die with 'Overwriting panel'.
+
+    HA retries failed setups and reloads the entry on options changes, and
+    unload does not unregister the panel — so the second setup raised
+    ValueError and wedged the entry in SETUP_ERROR until an HA restart.
+    Downstream effect: no vitrine pushes, devices disappear from the panel.
+    """
+    from homeassistant.config_entries import ConfigEntryState
+
+    _mock_api(aioclient_mock)
+    entry = await _setup_entry(hass, aioclient_mock)
+    assert entry.state is ConfigEntryState.LOADED
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED

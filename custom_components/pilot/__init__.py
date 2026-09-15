@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,7 +41,18 @@ PLATFORMS: list[Platform] = [
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 PANEL_URL_PATH = "pilot"
 STATIC_URL = f"/{DOMAIN}_static"
-PANEL_MODULE_URL = f"{STATIC_URL}/panel.js"
+
+
+def _panel_js_version() -> str:
+    """Content hash for cache busting — rebuilt panel.js must beat cached copies."""
+    try:
+        digest = hashlib.sha256((FRONTEND_DIR / "panel.js").read_bytes()).hexdigest()
+    except OSError:
+        return "dev"
+    return digest[:8]
+
+
+PANEL_MODULE_URL = f"{STATIC_URL}/panel.js?v={_panel_js_version()}"
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: PilotConfigEntry) -> None:
@@ -81,9 +93,12 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(STATIC_URL, str(FRONTEND_DIR), cache_headers=False)]
     )
+    # The frontend router only has a loader for component_name="custom"
+    # (ha-panel-custom → _panel_custom config). Any other name makes it create
+    # an undefined <ha-panel-<name>> element — a black screen.
     async_register_built_in_panel(
         hass,
-        component_name=PANEL_URL_PATH,
+        component_name="custom",
         sidebar_title="Pilot",
         sidebar_icon="mdi:robot-outline",
         frontend_url_path=PANEL_URL_PATH,

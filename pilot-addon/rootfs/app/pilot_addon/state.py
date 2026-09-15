@@ -101,7 +101,8 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.4.0"
+        self.runtime_version = "0.4.5"
+        self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
         self.mode = "normal"
@@ -138,10 +139,32 @@ class RuntimeState:
         return self.queue_size > 0
 
     queue: Any = None  # bound in __post_init__ via attach_trust()
+    checker: Any = None  # bound via attach_checker() when the runtime runs one
 
     def attach_trust(self, trust: Any) -> None:
         """Bind the trust layer (queue/audit)."""
         self.queue = trust
+
+    def attach_checker(self, checker: Any) -> None:
+        """Bind the deterministic checker layer."""
+        self.checker = checker
+
+    def layers_status(self) -> dict[str, dict[str, Any]]:
+        """Health of the runtime layers for the WS status command."""
+        return {
+            "vitrine": {
+                "alive": self.vitrine.connected,
+                "last_run_ts": self.vitrine.last_event_ts or None,
+            },
+            "checker": {
+                "alive": self.checker is not None,
+                "last_run_ts": getattr(self.checker, "last_run_ts", None),
+            },
+            "trust": {
+                "alive": self.queue is not None,
+                "last_run_ts": getattr(self.queue, "last_change_ts", None),
+            },
+        }
 
     def snapshot(self) -> dict[str, Any]:
         """Full /api/status payload consumed by the HA integration."""
@@ -159,4 +182,6 @@ class RuntimeState:
             "mode": self.mode,
             "current_focus": self.current_focus,
             "flags": list(self.flags),
+            "uptime_s": int(time.time() - self.started_ts),
+            "layers": self.layers_status(),
         }

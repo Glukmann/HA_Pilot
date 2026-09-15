@@ -81,9 +81,12 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(STATIC_URL, str(FRONTEND_DIR), cache_headers=False)]
     )
+    # The frontend router only has a loader for component_name="custom"
+    # (ha-panel-custom → _panel_custom config). Any other name makes it create
+    # an undefined <ha-panel-<name>> element — a black screen.
     async_register_built_in_panel(
         hass,
-        component_name=PANEL_URL_PATH,
+        component_name="custom",
         sidebar_title="Pilot",
         sidebar_icon="mdi:robot-outline",
         frontend_url_path=PANEL_URL_PATH,

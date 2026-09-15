@@ -1,5 +1,7 @@
 """Tests for the Pilot panel websocket API and actionable notifications."""
 
+from unittest.mock import patch
+
 from .test_entities import FULL_STATUS, _post_mocks
 from .test_integration import _mock_api, _setup_entry
 
@@ -7,6 +9,24 @@ QUEUE = [
     {"id": "q1", "title": "Raise bedroom setpoint to 22°C?", "summary": "night drift"},
     {"id": "q2", "title": "Suggest movie automation?", "summary": "3rd evening"},
 ]
+
+
+async def test_panel_registered_as_custom_component(hass, aioclient_mock):
+    """Regression: the frontend router only knows how to load component_name="custom".
+
+    Any other value makes partial-panel-resolver create an undefined
+    ha-panel-<name> element — the sidebar entry exists but the page renders
+    as a black screen.
+    """
+    _mock_api(aioclient_mock)
+    with patch("custom_components.pilot.async_register_built_in_panel") as register:
+        await _setup_entry(hass, aioclient_mock)
+    register.assert_called_once()
+    assert register.call_args.kwargs["component_name"] == "custom"
+    assert register.call_args.kwargs["frontend_url_path"] == "pilot"
+    panel_config = register.call_args.kwargs["config"]["_panel_custom"]
+    assert panel_config["name"] == "pilot-panel"
+    assert panel_config["js_url"].endswith("/panel.js")
 
 
 async def test_ws_status(hass, aioclient_mock, hass_ws_client):

@@ -65,12 +65,21 @@ class VitrineState:
 
     @property
     def lines(self) -> list[str]:
-        """Render one human-readable fact per entity."""
-        lines = []
+        """Render one human-readable fact per entity, grouped by room (area).
+
+        The agent reads the home much better with room context; entities
+        without an area go under "No room", always last.
+        """
+        groups: dict[str, list[str]] = {}
         for eid, sample in sorted(self.states.items()):
             name = sample.get("attrs", {}).get("friendly_name") or eid
             state = sample.get("state", "?")
-            lines.append(f"{name}: {state}")
+            area = sample.get("area") or "No room"
+            groups.setdefault(area, []).append(f"  {name}: {state}")
+        lines: list[str] = []
+        for area in sorted(groups, key=lambda a: (a == "No room", a)):
+            lines.append(f"{area}:")
+            lines.extend(groups[area])
         return lines
 
     def update(self, states: dict[str, dict[str, Any]]) -> None:

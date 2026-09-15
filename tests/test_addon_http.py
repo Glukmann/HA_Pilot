@@ -61,8 +61,9 @@ async def test_contract_roundtrip(tmp_path, hass, socket_enabled):
     )
     vitrine = await client.async_get_vitrine()
     assert vitrine["fresh"] is True  # push just arrived
-    assert "Office light: on" in vitrine["lines"]
-    assert "sensor.temp: 22.4" in vitrine["lines"]
+    assert "No room:" in vitrine["lines"]
+    assert "  Office light: on" in vitrine["lines"]
+    assert "  sensor.temp: 22.4" in vitrine["lines"]
 
     await client.async_reset("learning")
     await runner.cleanup()
@@ -81,3 +82,29 @@ async def test_token_enforced(tmp_path, hass, socket_enabled):
         raised = True
     assert raised
     await runner.cleanup()
+
+
+def test_vitrine_lines_grouped_by_area(tmp_path):
+    """Vitrine lines group entities under their room names; unassigned last."""
+    state = build_state(tmp_path)
+    state.vitrine.update(
+        {
+            "light.office": {
+                "state": "on",
+                "attrs": {"friendly_name": "Office"},
+                "area": "Bedroom",
+            },
+            "sensor.temp": {
+                "state": "22.4",
+                "attrs": {"friendly_name": "Temp"},
+                "area": "Bedroom",
+            },
+            "switch.misc": {"state": "off", "attrs": {"friendly_name": "Misc"}},
+        }
+    )
+    lines = state.vitrine.lines
+    assert lines[0] == "Bedroom:"
+    assert lines[1] == "  Office: on"
+    assert lines[2] == "  Temp: 22.4"
+    assert lines[3] == "No room:"
+    assert lines[4] == "  Misc: off"

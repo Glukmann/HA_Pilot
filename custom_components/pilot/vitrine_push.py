@@ -13,6 +13,9 @@ from typing import Any
 
 from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .coordinator import PilotConfigEntry
 
@@ -28,6 +31,27 @@ async def async_setup_vitrine_push(
     pending: dict[str, dict[str, Any]] = {}
     task: asyncio.Task[None] | None = None
 
+    def _attach_areas(batch: dict[str, dict[str, Any]]) -> None:
+        """Annotate samples with their HA area (room) name.
+
+        The agent reasons about the home room-by-room, so every entity
+        carries its room. Entity area wins; an entity without one inherits
+        its device's area.
+        """
+        ent_reg = er.async_get(hass)
+        area_reg = ar.async_get(hass)
+        dev_reg = dr.async_get(hass)
+        area_names = {area.id: area.name for area in area_reg.areas.values()}
+        for eid, sample in batch.items():
+            entry = ent_reg.entities.get(eid)
+            area_id = entry.area_id if entry else None
+            if area_id is None and entry is not None and entry.device_id is not None:
+                device = dev_reg.devices.get(entry.device_id)
+                area_id = device.area_id if device else None
+            name = area_names.get(area_id) if area_id else None
+            if name:
+                sample["area"] = name
+
     async def _flush() -> None:
         if not pending:
             return
@@ -35,6 +59,7 @@ async def async_setup_vitrine_push(
         pending.clear()
         if not coordinator.last_update_success:
             return  # runtime down; soft degradation — skip this batch
+        _attach_areas(batch)
         try:
             await coordinator.api.async_push_vitrine(batch)
         except Exception:

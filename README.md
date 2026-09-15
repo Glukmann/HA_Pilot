@@ -1,5 +1,10 @@
 # Pilot — proactive AI agent for Home Assistant
 
+> **Install (custom repository):** see [INSTALL.md](INSTALL.md) (RU) — HACS
+> or manual copy for the integration, plus the Pilot add-on from the same
+> repo. License: PolyForm Noncommercial 1.0.0 (personal use free,
+> commercial by agreement — see [COMMERCIAL.md](COMMERCIAL.md)).
+
 Pilot is not an "assistant on demand". It is a **proactive home manager**: it
 watches the household, derives human-level states ("awake", "away", "guests"),
 keeps the owner's long-term goals, and proposes — and, as trust grows, applies —

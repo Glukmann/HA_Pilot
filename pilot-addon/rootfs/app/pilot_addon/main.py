@@ -9,6 +9,7 @@ execution wires in with the full workspace (Phase 4 hardening).
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -23,6 +24,8 @@ from .trust import AuditLog, RollbackRegistry, TrustQueue
 from .vitrine import VitrineMirror
 
 DATA_DIR = Path(os.environ.get("PILOT_DATA", "/data"))
+
+logger = logging.getLogger("pilot.addon")
 
 
 def build_state(data_dir: Path = DATA_DIR) -> RuntimeState:
@@ -68,8 +71,13 @@ async def daily_scheduler(state: RuntimeState, checker: Checker, hour: int = 7) 
 
 async def main() -> None:
     """Start HTTP API + vitrine mirror + scheduler."""
+    logging.basicConfig(
+        level=os.environ.get("PILOT_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     state = build_state()
     checker = Checker()
+    state.attach_checker(checker)
 
     ha_ws = os.environ.get("HA_WS", "")
     ha_token = os.environ.get("HA_TOKEN", "")
@@ -89,6 +97,11 @@ async def main() -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", "8899")))
     await site.start()
+    logger.info(
+        "Pilot add-on %s listening on port %s",
+        state.runtime_version,
+        os.environ.get("PORT", "8899"),
+    )
 
     async with aiohttp.ClientSession() as session:
         await publish_discovery(session, port=int(os.environ.get("PORT", "8899")))

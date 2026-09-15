@@ -12,15 +12,20 @@ Endpoints (see custom_components/pilot/api.py):
     GET  /api/queue
     POST /api/queue/confirm {id, decision}
     GET  /api/vitrine
+    POST /api/vitrine/update
+    WS   /ws               workshop SPA protocol (see ws_api.py)
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from aiohttp import web
 
+from . import ws_api
+from .logbuffer import LogBuffer, RingBufferHandler
 from .state import RuntimeState
 
 
@@ -36,6 +41,23 @@ def create_app(state: RuntimeState) -> web.Application:
     """Build the aiohttp application serving the contract."""
     app = web.Application()
     app["state"] = state
+
+    log_buffer = LogBuffer()
+    app["log_buffer"] = log_buffer
+    log_handler = RingBufferHandler(log_buffer)
+    root_logger = logging.getLogger()
+
+    async def _start_log_sink(app: web.Application) -> None:
+        root_logger.addHandler(log_handler)
+
+    async def _stop_log_sink(app: web.Application) -> None:
+        root_logger.removeHandler(log_handler)
+        for ws in list(app["ws_connections"]):
+            await ws.close()
+
+    app.on_startup.append(_start_log_sink)
+    app.on_cleanup.append(_stop_log_sink)
+    ws_api.attach_ws(app, state, log_buffer)
 
     async def validate(request: web.Request) -> web.Response:
         if not _auth_ok(request, state):

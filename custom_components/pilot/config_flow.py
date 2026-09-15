@@ -83,7 +83,9 @@ class PilotConfigFlow(ConfigFlow, domain=DOMAIN):
         await self._async_set_unique_id_and_abort_if_configured()
         self._hassio_data = {
             CONF_RUNTIME_HOST: discovery_info.config["host"],
-            CONF_RUNTIME_PORT: DEFAULT_RUNTIME_PORT,
+            CONF_RUNTIME_PORT: int(
+                discovery_info.config.get("port", DEFAULT_RUNTIME_PORT)
+            ),
             CONF_RUNTIME_TOKEN: "",
         }
         return await self.async_step_hassio_confirm()

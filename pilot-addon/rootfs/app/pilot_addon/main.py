@@ -12,9 +12,11 @@ import asyncio
 import os
 from pathlib import Path
 
+import aiohttp
 from aiohttp import web
 
 from .checker import Checker
+from .discovery import publish_discovery
 from .http_api import create_app
 from .state import RuntimeState
 from .trust import AuditLog, RollbackRegistry, TrustQueue
@@ -87,6 +89,10 @@ async def main() -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", "8899")))
     await site.start()
+
+    async with aiohttp.ClientSession() as session:
+        await publish_discovery(session, port=int(os.environ.get("PORT", "8899")))
+
     await asyncio.gather(*tasks)
 
 

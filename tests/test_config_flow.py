@@ -94,7 +94,7 @@ async def test_hassio_discovery_creates_entry(hass):
     discovery = HassioServiceInfo(
         name="Pilot",
         slug="pilot",
-        config={"host": "pilot", "port": 8899},
+        config={"host": "pilot", "port": 9999},
         uuid="test-uuid",
     )
     with patch(
@@ -109,6 +109,7 @@ async def test_hassio_discovery_creates_entry(hass):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"]["runtime_host"] == "pilot"
+        assert result["data"]["runtime_port"] == 9999
 
 
 async def test_hassio_discovery_abort_already_configured(hass):

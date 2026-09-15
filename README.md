@@ -6,6 +6,96 @@ keeps the owner's long-term goals, and proposes — and, as trust grows, applies
 adjustments to the home's policy. The home learns from the owner, not the other
 way around.
 
+## Установка
+
+Pilot ставится двумя частями из одного репозитория: **интеграция**
+`custom_components/pilot` (сущности и панель в HA) и **аддон** (рантайм
+агента). Для пользователей это custom repository — проект пока не в
+каталоге HACS.
+
+### Требования
+
+- Home Assistant **с Supervisor** (HA OS или Supervised) — нужен для аддона
+  и автоматического обнаружения.
+- Права **администратора** в HA.
+- HACS — **не обязателен**: интеграцию можно поставить вручную (вариант Б).
+- Аддон собирается под архитектуры `amd64` и `aarch64`.
+- Интернет нужен только на этапе установки — вся работа дальше локальная.
+
+### Шаг 1. Интеграция
+
+**Вариант А. Через HACS (рекомендуется)**
+
+1. HACS → **Интеграции** → меню **⋮** → **Пользовательские репозитории**.
+2. URL: `https://github.com/Glukmann/HA_Pilot`, категория: **Интеграция** →
+   **Добавить**.
+3. Найти **Pilot** в списке → **Скачать** → перезапустить Home Assistant
+   (HACS предложит сам).
+
+**Вариант Б. Вручную**
+
+1. В репозитории открыть папку
+   [`custom_components/pilot`](https://github.com/Glukmann/HA_Pilot/tree/main/custom_components/pilot).
+2. Скопировать её целиком в `/config/custom_components/pilot` (через File
+   editor, Samba или SSH-дополнение).
+3. Перезапустить Home Assistant.
+
+### Шаг 2. Аддон (рантайм агента)
+
+1. **Настройки** → **Дополнения** → **Магазин дополнений**.
+2. Меню **⋮** (правый верхний угол) → **Репозитории** → добавить
+   `https://github.com/Glukmann/HA_Pilot` → **Закрыть**.
+3. В магазине появится карточка **Pilot** → **Установить**.
+4. После установки нажать **Запустить** и проверить автозапуск:
+   Настройки → Автозапуск → «Включено».
+
+Доступ к API Home Assistant Supervisor выдаёт аддону сам, настраивать
+ничего не нужно. Единственная настройка на старте — **дневной бюджет**
+(₽/день, по умолчанию 10): Дополнения → Pilot → Конфигурация.
+
+### Шаг 3. Подключение
+
+Когда аддон запущен, он **объявляет себя** Home Assistant автоматически:
+
+1. **Настройки** → **Устройства и службы** → в разделе «Обнаружено»
+   появится **Pilot** → **Подтвердить** → **Готово**.
+2. Устройство «Pilot» появится в списке устройств — со статусом агента,
+   очередью подтверждений, шкалами персоны и ссылкой на панель.
+
+Если обнаружение не сработало (например, аддон запущен вне Supervisor):
+**Добавить интеграцию** → **Pilot** → ввести вручную:
+
+- **Хост** — имя аддона в сети Supervisor, например `94eaa3d6-pilot`;
+- **Порт** — `8899`.
+
+### Обновление
+
+- **Аддон:** Магазин дополнений → карточка Pilot → кнопка **Обновить** при
+  выходе новой версии. Что нового — на вкладке **Changelog** в интерфейсе.
+- **Интеграция (HACS):** HACS → Интеграции → Pilot → **Обновить** →
+  перезапуск HA.
+- **Интеграция (вручную):** повторить вариант Б шага 1 поверх существующей
+  папки → перезапуск HA.
+
+### Если что-то пошло не так
+
+1. **Журнал аддона:** Дополнения → Pilot → вкладка **Журнал**.
+2. **Журнал HA:** Настройки → Система → **Журнал ошибок** — там же
+   появляются замечания интеграции (repairs): рантайм недоступен и т.п.
+3. Подробный лог интеграции — в `configuration.yaml`:
+
+   ```yaml
+   logger:
+     logs:
+       custom_components.pilot: debug
+   ```
+
+### Удаление
+
+1. Настройки → Устройства и службы → Pilot → **Удалить**.
+2. Дополнения → Pilot → **Остановить** → **Удалить** (опционально убрать
+   репозиторий из списка репозиториев магазина).
+
 ## Why
 
 - Trigger-based automations catch events, not intentions ("TV at 23:00" is a
@@ -44,7 +134,7 @@ way around.
 - **Local memory**: raw logs, daily digests, vector search over digests,
   structured facts about the owner, self-maintained skills — all on-device.
 
-## Architecture (target)
+## Architecture
 
 Pilot ships as two artifacts of one repository, following the ESPHome /
 Music Assistant pattern:
@@ -66,12 +156,12 @@ machine.
 
 ## Status
 
-Concept and architecture design are done; a standalone prototype of the state
-mirror runs in the owner's home. The integration and the add-on are under
-development.
-
-See [GOALS.md](GOALS.md) for product goals and [LICENSES.md](LICENSES.md) for
-licensing.
+MVP (integration + add-on) is implemented and runs in the owner's home:
+install via the add-on store, auto-discovery of the integration, device
+entities, panel, state-mirror vitrine pushed by the integration. See
+[GOALS.md](GOALS.md) for product goals and [LICENSES.md](LICENSES.md) for
+licensing (PolyForm Noncommercial 1.0.0 — personal use free, commercial by
+agreement, see [COMMERCIAL.md](COMMERCIAL.md)).
 
 ## Author
 
@@ -79,3 +169,7 @@ Pilot is developed and maintained by
 [Andrey Lipanov](https://www.linkedin.com/in/andrey-lipanov-5a3481122/).
 Ideas, questions, and collaboration offers — via
 [Issues](https://github.com/Glukmann/HA_Pilot/issues) or LinkedIn.
+
+---
+
+*Powered by [OpenClaw](https://github.com/openclaw/openclaw) (MIT).*

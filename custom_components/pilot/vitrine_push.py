@@ -8,6 +8,7 @@ preserved: HA (master) pushes; the agent reads the vitrine, never polls.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 import time
 from typing import Any
 
@@ -46,7 +47,11 @@ async def async_setup_vitrine_push(
             entry = ent_reg.entities.get(eid)
             area_id = entry.area_id if entry else None
             if area_id is None and entry is not None and entry.device_id is not None:
-                device = dev_reg.devices.get(entry.device_id)
+                devices = dev_reg.devices
+                if isinstance(devices, Mapping):  # HA <= 2026.8: dict-like registry
+                    device = devices.get(entry.device_id)
+                else:  # HA >= 2026.9: Collection[DeviceEntry]
+                    device = next((d for d in devices if d.id == entry.device_id), None)
                 area_id = device.area_id if device else None
             name = area_names.get(area_id) if area_id else None
             if name:
@@ -69,18 +74,34 @@ async def async_setup_vitrine_push(
         await asyncio.sleep(PUSH_DEBOUNCE_S)
         await _flush()
 
+    unloaded = False
+
     def _schedule_flush() -> None:
         nonlocal task
 
         def _create() -> None:
             nonlocal task
-            if task is None or task.done():
+            if not unloaded and (task is None or task.done()):
                 task = hass.loop.create_task(_delayed_flush())
 
         # State listeners can fire from a worker thread (HA schedules state
         # changes through executors); asyncio loop handles may only be touched
         # from the loop thread, so hop on via call_soon_threadsafe.
         hass.loop.call_soon_threadsafe(_create)
+
+    def _cancel_pending_flush() -> None:
+        # The debounce task survives entry unload unless cancelled; pytest's
+        # hass fixture unloads entries before checking for lingering tasks.
+        # The flag also covers the deferred create: a _create callback queued
+        # via call_soon_threadsafe may run after this cancellation, and state
+        # changes fired while the entry is being torn down would otherwise
+        # spawn a fresh sleeping task.
+        nonlocal task, unloaded
+        unloaded = True
+        if task is not None and not task.done():
+            task.cancel()
+
+    entry.async_on_unload(_cancel_pending_flush)
 
     def _on_state_change(event: Event[EventStateChangedData]) -> None:
         state = event.data["new_state"]

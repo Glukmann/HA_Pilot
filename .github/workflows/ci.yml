@@ -15,7 +15,10 @@ jobs:
 
   hacs:
     # HACS pre-publish checks. The license check stays yellow until Phase 7:
-    # the project uses a custom non-SPDX license by the owner's decision.
+    # HACS requires an OSI-approved license, while the project deliberately
+    # uses PolyForm-Noncommercial-1.0.0 (SPDX-standard, non-commercial by
+    # the owner's decision) — a structural conflict only the owner can
+    # resolve for publishing.
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:

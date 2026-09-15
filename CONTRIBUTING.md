@@ -23,4 +23,5 @@ merged by the owner. Opening a PR does not guarantee merge; large changes are
 best discussed in an issue first.
 
 By contributing, you agree that your contributions are licensed under the
-project's Pilot Personal-Use License (see LICENSE).
+project's license — PolyForm Noncommercial License 1.0.0 (SPDX:
+`PolyForm-Noncommercial-1.0.0`, see LICENSE).

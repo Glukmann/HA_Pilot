@@ -8,9 +8,9 @@ preserved: HA (master) pushes; the agent reads the vitrine, never polls.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Collection, Mapping
+from collections.abc import Mapping
 import time
-from typing import Any, cast
+from typing import Any
 
 from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant
@@ -51,8 +51,7 @@ async def async_setup_vitrine_push(
                 if isinstance(devices, Mapping):  # HA <= 2026.8: dict-like registry
                     device = devices.get(entry.device_id)
                 else:  # HA >= 2026.9: Collection[DeviceEntry]
-                    entries = cast(Collection[dr.DeviceEntry], devices)
-                    device = next((d for d in entries if d.id == entry.device_id), None)
+                    device = next((d for d in devices if d.id == entry.device_id), None)
                 area_id = device.area_id if device else None
             name = area_names.get(area_id) if area_id else None
             if name:
@@ -75,12 +74,14 @@ async def async_setup_vitrine_push(
         await asyncio.sleep(PUSH_DEBOUNCE_S)
         await _flush()
 
+    unloaded = False
+
     def _schedule_flush() -> None:
         nonlocal task
 
         def _create() -> None:
             nonlocal task
-            if task is None or task.done():
+            if not unloaded and (task is None or task.done()):
                 task = hass.loop.create_task(_delayed_flush())
 
         # State listeners can fire from a worker thread (HA schedules state
@@ -91,7 +92,12 @@ async def async_setup_vitrine_push(
     def _cancel_pending_flush() -> None:
         # The debounce task survives entry unload unless cancelled; pytest's
         # hass fixture unloads entries before checking for lingering tasks.
-        nonlocal task
+        # The flag also covers the deferred create: a _create callback queued
+        # via call_soon_threadsafe may run after this cancellation, and state
+        # changes fired while the entry is being torn down would otherwise
+        # spawn a fresh sleeping task.
+        nonlocal task, unloaded
+        unloaded = True
         if task is not None and not task.done():
             task.cancel()
 

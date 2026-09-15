@@ -1,6 +1,10 @@
 """Tests for the Pilot panel websocket API and actionable notifications."""
 
+import hashlib
+from pathlib import Path
 from unittest.mock import patch
+
+import custom_components.pilot
 
 from .test_entities import FULL_STATUS, _post_mocks
 from .test_integration import _mock_api, _setup_entry
@@ -26,7 +30,13 @@ async def test_panel_registered_as_custom_component(hass, aioclient_mock):
     assert register.call_args.kwargs["frontend_url_path"] == "pilot"
     panel_config = register.call_args.kwargs["config"]["_panel_custom"]
     assert panel_config["name"] == "pilot-panel"
-    assert panel_config["js_url"].endswith("/panel.js")
+    assert panel_config["js_url"].startswith("/pilot_static/panel.js?v=")
+    expected = hashlib.sha256(
+        (
+            Path(custom_components.pilot.__file__).parent / "frontend" / "panel.js"
+        ).read_bytes()
+    ).hexdigest()[:8]
+    assert panel_config["js_url"].endswith(f"v={expected}")
 
 
 async def test_ws_status(hass, aioclient_mock, hass_ws_client):

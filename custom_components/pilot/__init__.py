@@ -89,7 +89,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         frontend_url_path=PANEL_URL_PATH,
         require_admin=True,
         config={
-            "_custom_panel": {
+            "_panel_custom": {
                 "name": "pilot-panel",
                 "js_url": PANEL_MODULE_URL,
                 "embed_iframe": False,

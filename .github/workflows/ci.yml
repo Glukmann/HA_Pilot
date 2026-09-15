@@ -56,3 +56,19 @@ jobs:
       - run: pip install -r requirements_test.txt homeassistant==${{ matrix.ha-version }}
         if: matrix.ha-version != 'latest'
       - run: pytest tests/ -v
+
+  workshop-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: workshop/package-lock.json
+      - name: Install workshop dependencies
+        run: npm ci
+        working-directory: workshop
+      - name: Typecheck and build workshop SPA
+        run: npm run build
+        working-directory: workshop

@@ -8,8 +8,9 @@ preserved: HA (master) pushes; the agent reads the vitrine, never polls.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Collection, Mapping
 import time
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.const import EVENT_STATE_CHANGED
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant
@@ -46,7 +47,12 @@ async def async_setup_vitrine_push(
             entry = ent_reg.entities.get(eid)
             area_id = entry.area_id if entry else None
             if area_id is None and entry is not None and entry.device_id is not None:
-                device = dev_reg.devices.get(entry.device_id)
+                devices = dev_reg.devices
+                if isinstance(devices, Mapping):  # HA <= 2026.8: dict-like registry
+                    device = devices.get(entry.device_id)
+                else:  # HA >= 2026.9: Collection[DeviceEntry]
+                    entries = cast(Collection[dr.DeviceEntry], devices)
+                    device = next((d for d in entries if d.id == entry.device_id), None)
                 area_id = device.area_id if device else None
             name = area_names.get(area_id) if area_id else None
             if name:
@@ -81,6 +87,15 @@ async def async_setup_vitrine_push(
         # changes through executors); asyncio loop handles may only be touched
         # from the loop thread, so hop on via call_soon_threadsafe.
         hass.loop.call_soon_threadsafe(_create)
+
+    def _cancel_pending_flush() -> None:
+        # The debounce task survives entry unload unless cancelled; pytest's
+        # hass fixture unloads entries before checking for lingering tasks.
+        nonlocal task
+        if task is not None and not task.done():
+            task.cancel()
+
+    entry.async_on_unload(_cancel_pending_flush)
 
     def _on_state_change(event: Event[EventStateChangedData]) -> None:
         state = event.data["new_state"]

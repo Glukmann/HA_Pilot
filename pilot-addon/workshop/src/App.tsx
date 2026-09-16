@@ -7,7 +7,8 @@ import type { PilotClient } from "./api/client";
 import { Layout } from "./components/Layout";
 import { useStatus } from "./hooks/useStatus";
 import { AdminSection } from "./sections/AdminSection";
-import { ChannelsSection, ModelsSection, PluginsSection } from "./sections/ConfigSection";
+import { ChannelsSection, ModelsSection } from "./sections/ConfigSection";
+import { LibrarySection } from "./sections/LibrarySection";
 import { OnboardingWizard } from "./sections/OnboardingWizard";
 import { PersonaSection } from "./sections/PersonaSection";
 import { QueueSection } from "./sections/QueueSection";
@@ -45,7 +46,7 @@ function WizardGate({ client }: { client: PilotClient }) {
         <Route index element={<Navigate to="/admin" replace />} />
         <Route path="/channels" element={<ChannelsSection />} />
         <Route path="/models" element={<ModelsSection />} />
-        <Route path="/plugins" element={<PluginsSection />} />
+        <Route path="/plugins" element={<LibrarySection />} />
         <Route path="/persona" element={<PersonaSection />} />
         <Route path="/queue" element={<QueueSection />} />
         <Route path="/vitrine" element={<VitrineSection />} />

@@ -135,14 +135,3 @@ export function ModelsSection() {
     />
   );
 }
-
-export function PluginsSection() {
-  return (
-    <ConfigSection
-      sectionKey="plugins"
-      title="Плагины и навыки"
-      emptyHeadline="Плагины ещё не настроены."
-      emptyBody="Каталог навыков и workspace агента (skills, память, журналы) появятся здесь после онбординга рантайма."
-    />
-  );
-}

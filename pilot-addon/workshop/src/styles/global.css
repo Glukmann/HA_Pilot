@@ -643,3 +643,176 @@ body {
   padding-left: 10px;
   border-left: 1px solid var(--border);
 }
+/* ---- vitrine ----------------------------------------------------------- */
+
+.badge-fresh {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.badge-stale {
+  color: var(--err);
+  background: var(--err-soft);
+}
+
+.card-stale {
+  border-color: rgba(224, 96, 85, 0.5);
+}
+
+.vitrine-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vitrine-age {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.vitrine-filters {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  min-width: 220px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+select.input {
+  min-width: 150px;
+}
+
+.vitrine-count {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.vitrine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.vitrine-room {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px 12px;
+}
+
+.vitrine-room-name {
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+
+.vitrine-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.vitrine-row:first-of-type {
+  border-top: none;
+}
+
+.vitrine-entity {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vitrine-value {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--cyan);
+  white-space: nowrap;
+}
+
+/* ---- queue ------------------------------------------------------------- */
+
+.banner-error {
+  margin: 0;
+  border-color: rgba(224, 96, 85, 0.4);
+  background: var(--err-soft);
+  color: var(--err);
+}
+
+.queue-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queue-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.queue-title {
+  font-weight: 650;
+}
+
+.queue-time {
+  color: var(--text-faint);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.queue-summary {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.queue-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-yes {
+  border-color: rgba(70, 185, 120, 0.5);
+  color: var(--ok);
+}
+
+.btn-yes:hover:not(:disabled) {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.btn-no {
+  border-color: rgba(224, 96, 85, 0.5);
+  color: var(--err);
+}
+
+.btn-no:hover:not(:disabled) {
+  border-color: var(--err);
+  color: var(--err);
+}

@@ -7,11 +7,8 @@ import { Layout } from "./components/Layout";
 import { AdminSection } from "./sections/AdminSection";
 import { ChannelsSection, ModelsSection, PluginsSection } from "./sections/ConfigSection";
 import { PersonaSection } from "./sections/PersonaSection";
-import { SectionStub } from "./sections/SectionStub";
-import { SECTIONS } from "./sections/sections";
-
-// Live sections render real data; the rest falls back to a stub.
-const LIVE_SECTIONS = new Set(["/admin", "/channels", "/models", "/plugins", "/persona"]);
+import { QueueSection } from "./sections/QueueSection";
+import { VitrineSection } from "./sections/VitrineSection";
 
 export default function App() {
   // One client for the app lifetime; started/stopped with the mount.
@@ -29,17 +26,12 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<Navigate to="/admin" replace />} />
-            {SECTIONS.filter((s) => !LIVE_SECTIONS.has(s.path)).map((section) => (
-              <Route
-                key={section.path}
-                path={section.path}
-                element={<SectionStub meta={section} />}
-              />
-            ))}
             <Route path="/channels" element={<ChannelsSection />} />
             <Route path="/models" element={<ModelsSection />} />
             <Route path="/plugins" element={<PluginsSection />} />
             <Route path="/persona" element={<PersonaSection />} />
+            <Route path="/queue" element={<QueueSection />} />
+            <Route path="/vitrine" element={<VitrineSection />} />
             <Route path="/admin" element={<AdminSection />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>

@@ -2,14 +2,17 @@ import type { ConnectionState, PilotClient } from "./client";
 import { Emitter } from "./emitter";
 import { MOCK_CONFIG } from "./fixtures/config";
 import { MOCK_LOGS_RECENT, nextLiveLog } from "./fixtures/logs";
-import { MOCK_QUEUE } from "./fixtures/queue";
+import { MOCK_PROPOSAL_POOL, MOCK_QUEUE } from "./fixtures/queue";
 import { MOCK_STATUS_BASE } from "./fixtures/status";
 import { MOCK_VITRINE } from "./fixtures/vitrine";
-import type { LogEntry, QueuePayload, StatusSnapshot } from "./types";
+import type { LogEntry, QueueItem, QueuePayload, StatusSnapshot } from "./types";
 
 const LATENCY_MS = 60;
+/** Slow drip of new proposals so the Queue screen stays alive in mock. */
+const PROPOSAL_INTERVAL_MS = 60_000;
 /** Cost drift cadence, so the budget block looks alive in mock. */
 const COST_DRIFT_MS = 45_000;
+const MAX_MOCK_QUEUE = 3;
 
 const SLIDERS = ["butler_observer", "politeness", "verbosity", "conservative"] as const;
 const PRESETS: Record<string, Record<string, number>> = {
@@ -22,9 +25,9 @@ const MODES = ["normal", "vacation", "guests", "sick"] as const;
 
 /**
  * Fixture-backed client: same contract as WsPilotClient, but answers from
- * local data and emits synthetic live events (log stream, status
- * broadcasts after setters). Selected with VITE_PILOT_API=mock so the
- * frontend can be developed without the add-on.
+ * local data and emits synthetic live events (log stream, queue changes,
+ * status broadcasts after setters). Selected with VITE_PILOT_API=mock so
+ * the frontend can be developed without the add-on.
  */
 export class MockPilotClient implements PilotClient {
   readonly mode = "mock" as const;
@@ -33,7 +36,11 @@ export class MockPilotClient implements PilotClient {
   private startedAtMs = 0;
   private logTimer: ReturnType<typeof setTimeout> | null = null;
   private logSubscribed = false;
+  private queueItems: QueueItem[] = [];
+  private proposalTimer: ReturnType<typeof setTimeout> | null = null;
+  private proposalIndex = 0;
   private costTimer: ReturnType<typeof setTimeout> | null = null;
+  private cabinetLightOn = true;
   private persona: Record<string, number>;
   private personaPreset: string;
   private pilotMode: string;
@@ -75,16 +82,19 @@ export class MockPilotClient implements PilotClient {
   start(): void {
     if (this.state !== "disconnected") return;
     this.startedAtMs = Date.now();
+    this.queueItems = MOCK_QUEUE.map((item) => ({ ...item }));
     this.setState("connecting");
     setTimeout(() => {
       this.setState("connected");
       this.scheduleLog();
+      this.scheduleProposal();
       this.scheduleCostDrift();
     }, 250);
   }
 
   stop(): void {
     this.clearLogTimer();
+    this.clearProposalTimer();
     this.clearCostTimer();
     this.logSubscribed = false;
     this.setState("disconnected");
@@ -125,19 +135,24 @@ export class MockPilotClient implements PilotClient {
         resolve({ ok: true } as T);
         return;
       case "queue/get":
-        resolve({ items: MOCK_QUEUE } as T);
+        resolve({ items: this.queueItems.map((item) => ({ ...item })) } as T);
         return;
       case "queue/confirm": {
         const id = String(payload.id ?? "");
-        if (MOCK_QUEUE.some((item) => item.id === id)) {
-          resolve({ ok: true } as T);
-        } else {
+        const index = this.queueItems.findIndex((item) => item.id === id);
+        if (index === -1) {
           reject(new Error("not found"));
+          return;
         }
+        this.queueItems.splice(index, 1);
+        resolve({ ok: true } as T);
+        // The real server broadcasts a fresh queue to every connection
+        // after a successful confirm; mimic that (ourselves included).
+        this.queueEmitter.emit({ items: this.queueItems.map((item) => ({ ...item })) });
         return;
       }
       case "vitrine/get":
-        resolve(MOCK_VITRINE as T);
+        resolve(this.buildVitrine() as T);
         return;
       case "persona/set": {
         const slider = String(payload.slider ?? "");
@@ -215,6 +230,8 @@ export class MockPilotClient implements PilotClient {
       mode: this.pilotMode,
       daily_budget: this.dailyBudget,
       cost_today: Math.round(this.costToday * 10_000) / 10_000,
+      queue_size: this.queueItems.length,
+      awaiting_confirmation: this.queueItems.length > 0,
       uptime_s:
         MOCK_STATUS_BASE.uptime_s +
         Math.floor((Date.now() - this.startedAtMs) / 1000),
@@ -226,6 +243,22 @@ export class MockPilotClient implements PilotClient {
     };
   }
 
+  private buildVitrine() {
+    // Fresh copy each poll, with one entity drifting so the 10s refresh
+    // is visible in mock mode.
+    if (Math.random() < 0.5) {
+      this.cabinetLightOn = !this.cabinetLightOn;
+    }
+    return {
+      fresh: MOCK_VITRINE.fresh,
+      lines: MOCK_VITRINE.lines.map((line) =>
+        line.startsWith("  Свет кабинета:")
+          ? `  Свет кабинета: ${this.cabinetLightOn ? "on" : "off"}`
+          : line,
+      ),
+    };
+  }
+
   private scheduleLog(): void {
     this.clearLogTimer();
     this.logTimer = setTimeout(() => {
@@ -234,6 +267,23 @@ export class MockPilotClient implements PilotClient {
       }
       this.scheduleLog();
     }, 900 + Math.random() * 2200);
+  }
+
+  private scheduleProposal(): void {
+    this.clearProposalTimer();
+    this.proposalTimer = setTimeout(() => {
+      if (this.state === "connected" && this.queueItems.length < MAX_MOCK_QUEUE) {
+        const template = MOCK_PROPOSAL_POOL[this.proposalIndex % MOCK_PROPOSAL_POOL.length];
+        this.proposalIndex += 1;
+        if (!this.queueItems.some((item) => item.id === template.id)) {
+          this.queueItems.push({ ...template, created_ts: Date.now() / 1000 });
+          this.queueEmitter.emit({
+            items: this.queueItems.map((item) => ({ ...item })),
+          });
+        }
+      }
+      this.scheduleProposal();
+    }, PROPOSAL_INTERVAL_MS);
   }
 
   private scheduleCostDrift(): void {
@@ -251,6 +301,13 @@ export class MockPilotClient implements PilotClient {
     if (this.logTimer !== null) {
       clearTimeout(this.logTimer);
       this.logTimer = null;
+    }
+  }
+
+  private clearProposalTimer(): void {
+    if (this.proposalTimer !== null) {
+      clearTimeout(this.proposalTimer);
+      this.proposalTimer = null;
     }
   }
 

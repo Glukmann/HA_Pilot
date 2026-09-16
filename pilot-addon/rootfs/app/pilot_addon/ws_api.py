@@ -18,13 +18,17 @@ Commands (client -> server), each answered with a frame of the same type:
                                        runtime config file with secret values
                                        masked ("***"); configured:false when
                                        the file is absent or not valid JSON
+    config/set      {section, values} -> payload: {ok: true, section} — deep
+                                       merge of values into that config file
+                                       section (atomic write; a broken file is
+                                       backed up as pilot.json.bad-<ts>)
 
 Server -> client events:
     log    new record for log subscribers (after logs/subscribe)
     queue  broadcast to all connections after a successful queue/confirm
     status broadcast to all connections after a successful persona/set,
-           preset/apply, budget/set or mode/set (fresh state.snapshot(),
-           so clients refresh their cards without polling)
+           preset/apply, budget/set, mode/set or config/set (fresh
+           state.snapshot(), so clients refresh their cards without polling)
 
 Failures (unknown command, bad JSON, bad payload, rejected confirm) answer
 {type: "error", payload: {"message"}} and the connection stays open.
@@ -38,12 +42,15 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 import json
+import logging
 from typing import Any
 
 from aiohttp import WSMsgType, web
 
 from .logbuffer import LogBuffer
 from .state import RuntimeState
+
+logger = logging.getLogger("pilot.addon")
 
 Broadcast = Callable[[str, Any], Awaitable[None]]
 
@@ -111,7 +118,7 @@ CommandHandler = Callable[[WsSession, dict[str, Any]], Awaitable[Any]]
 # Successful setters broadcast a fresh status snapshot to every connection,
 # so all clients refresh their cards without polling.
 _STATUS_BROADCAST_COMMANDS = frozenset(
-    {"persona/set", "preset/apply", "budget/set", "mode/set"}
+    {"persona/set", "preset/apply", "budget/set", "mode/set", "config/set"}
 )
 
 
@@ -255,13 +262,29 @@ def _mask_secrets(node: Any) -> Any:
 async def _cmd_config_get(
     session: WsSession, payload: dict[str, Any]
 ) -> dict[str, Any]:
-    try:
-        raw = json.loads(session.state.config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {"configured": False, "sections": {}}
-    if not isinstance(raw, dict):
+    raw = session.state.read_config()
+    if raw is None:
         return {"configured": False, "sections": {}}
     return {"configured": True, "sections": _mask_secrets(raw)}
+
+
+async def _cmd_config_set(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    section = payload.get("section")
+    if not isinstance(section, str) or not section:
+        raise CommandError("section must be a non-empty string")
+    values = payload.get("values")
+    if not isinstance(values, dict):
+        raise CommandError("values must be an object")
+    try:
+        session.state.write_config_section(section, values)
+    except (OSError, ValueError) as err:
+        raise CommandError(f"config write failed: {err}") from err
+    # Audit and logs never carry the values — they may contain secrets.
+    session.state.queue._audit.record("config.set", {"section": section})
+    logger.info("config.set section=%s", section)
+    return {"ok": True, "section": section}
 
 
 def _registry() -> dict[str, CommandHandler]:
@@ -278,6 +301,7 @@ def _registry() -> dict[str, CommandHandler]:
         "budget/set": _cmd_budget_set,
         "mode/set": _cmd_mode_set,
         "config/get": _cmd_config_get,
+        "config/set": _cmd_config_set,
     }
 
 

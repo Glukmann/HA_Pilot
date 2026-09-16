@@ -8,6 +8,7 @@ confirmation queue and audit log are append-only files.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from pathlib import Path
 import time
 from typing import Any
@@ -40,6 +41,16 @@ PERSONA_PRESETS: dict[str, dict[str, int]] = {
 }
 PILOT_MODES = ("normal", "vacation", "guests", "sick")
 VITRINE_MAX_AGE_S = 60
+
+
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Recursive dict merge; overlay wins, non-dict values replace."""
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            base[key] = _deep_merge(dict(base[key]), value)
+        else:
+            base[key] = value
+    return base
 
 
 @dataclass
@@ -134,8 +145,54 @@ class RuntimeState:
     # -- persona / policy -------------------------------------------------
     @property
     def config_path(self) -> Path:
-        """Runtime configuration file behind the WS config/get command."""
+        """Runtime configuration file behind the WS config commands."""
         return Path(self.data_dir) / "pilot.json"
+
+    def read_config(self) -> dict[str, Any] | None:
+        """Parsed pilot.json; None when missing, unreadable or not an object."""
+        try:
+            raw = json.loads(self.config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return raw if isinstance(raw, dict) else None
+
+    def write_config_section(self, section: str, values: dict[str, Any]) -> None:
+        """Deep-merge values into pilot.json[section]; write atomically.
+
+        Other sections are preserved. A broken existing file is kept as
+        pilot.json.bad-<timestamp> next to the fresh config. Raises OSError
+        when the write itself fails and ValueError on a bad section name.
+        """
+        if not section:
+            raise ValueError("empty section")
+        current = self.read_config()
+        if current is None and self.config_path.exists():
+            # Broken JSON: keep a copy for post-mortem, start from scratch.
+            stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+            backup = self.config_path.with_name(f"pilot.json.bad-{stamp}")
+            self.config_path.replace(backup)
+            current = {}
+        merged = dict(current or {})
+        existing = merged.get(section)
+        base = dict(existing) if isinstance(existing, dict) else {}
+        merged[section] = _deep_merge(base, values)
+        tmp = self.config_path.with_name("pilot.json.tmp")
+        tmp.write_text(
+            json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        tmp.replace(self.config_path)
+
+    def is_onboarded(self) -> bool:
+        """True when the supervisor section has base_url + api_key + model.
+
+        The wizard finishes by writing that section, so the flag rises on
+        its own; a missing or broken config means "not onboarded".
+        """
+        raw = self.read_config() or {}
+        supervisor = raw.get("supervisor")
+        if not isinstance(supervisor, dict):
+            return False
+        return all(supervisor.get(key) for key in ("base_url", "api_key", "model"))
 
     def set_persona(self, slider: str, value: int) -> None:
         if slider not in PERSONA_SLIDERS:
@@ -208,6 +265,7 @@ class RuntimeState:
             "flags": list(self.flags),
             "uptime_s": int(time.time() - self.started_ts),
             "layers": self.layers_status(),
+            "onboarded": self.is_onboarded(),
             "supervisor": {
                 **self.supervisor_status,
                 "cost_today": round(self.cost_today, 4),

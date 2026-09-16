@@ -13,3 +13,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
+
+# Workshop frontend
+workshop/node_modules/
+workshop/dist/
+
+# Workshop bundle copied into the add-on package for local test builds
+pilot-addon/rootfs/app/pilot_addon/workshop_dist/

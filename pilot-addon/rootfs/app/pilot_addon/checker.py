@@ -38,6 +38,7 @@ class Checker:
         self.thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
         self._state_history: dict[str, list[tuple[float, str]]] = {}
         self._energy_history: dict[str, list[tuple[float, float]]] = {}
+        self.last_run_ts: float | None = None
 
     def check_sensor_dead(self, sample: EntitySample, now: float | None = None) -> bool:
         """Entity unavailable/unknown longer than the threshold."""
@@ -111,6 +112,7 @@ class Checker:
     ) -> list[str]:
         """Run all checks over samples; return flag strings."""
         now = now or time.time()
+        self.last_run_ts = now
         flags: list[str] = []
         for sample in samples:
             eid = sample.entity_id

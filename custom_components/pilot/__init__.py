@@ -2,27 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
-from pathlib import Path
-from typing import TYPE_CHECKING
-
-from homeassistant.components.frontend import async_register_built_in_panel
-
-if TYPE_CHECKING:
-    from homeassistant.components.http.server import StaticPathConfig
-else:
-    try:
-        from homeassistant.components.http.server import (  # type: ignore[no-redef]
-            StaticPathConfig,
-        )
-    except ImportError:  # HA < 2026.8 keeps it in the http package
-        from homeassistant.components.http import (  # type: ignore[no-redef]
-            StaticPathConfig,
-        )
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
 from .coordinator import PilotConfigEntry, PilotDataUpdateCoordinator
 from .notify import async_setup_notify
 from .repairs import async_sync_repairs_issue
@@ -37,22 +19,6 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.TEXT,
 ]
-
-FRONTEND_DIR = Path(__file__).parent / "frontend"
-PANEL_URL_PATH = "pilot"
-STATIC_URL = f"/{DOMAIN}_static"
-
-
-def _panel_js_version() -> str:
-    """Content hash for cache busting — rebuilt panel.js must beat cached copies."""
-    try:
-        digest = hashlib.sha256((FRONTEND_DIR / "panel.js").read_bytes()).hexdigest()
-    except OSError:
-        return "dev"
-    return digest[:8]
-
-
-PANEL_MODULE_URL = f"{STATIC_URL}/panel.js?v={_panel_js_version()}"
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: PilotConfigEntry) -> None:
@@ -79,48 +45,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> boo
     )
     async_sync_repairs_issue(hass, entry.entry_id, not coordinator.last_update_success)
 
+    # The single user-facing UI is the add-on's "Пилот" sidebar panel (the
+    # workshop SPA behind ingress); this integration exposes entities,
+    # services and the pilot/* websocket API only — no own panel.
     async_register_commands(hass)
-    await async_register_panel(hass)
     await async_setup_notify(hass, entry)
     await async_setup_vitrine_push(hass, entry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
-
-
-async def async_register_panel(hass: HomeAssistant) -> None:
-    """Register the sidebar panel and its static frontend (once per session).
-
-    Setup may run again without a prior unload — HA retries a failed setup,
-    the entry reloads on options changes — and ``async_register_built_in_panel``
-    raises ``ValueError: Overwriting panel`` on a duplicate registration,
-    which used to wedge the entry in SETUP_ERROR until an HA restart.
-    """
-    if hass.data.setdefault(DOMAIN, {}).get("panel_registered"):
-        return
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(STATIC_URL, str(FRONTEND_DIR), cache_headers=False)]
-    )
-    # The frontend router only has a loader for component_name="custom"
-    # (ha-panel-custom → _panel_custom config). Any other name makes it create
-    # an undefined <ha-panel-<name>> element — a black screen.
-    async_register_built_in_panel(
-        hass,
-        component_name="custom",
-        sidebar_title="Pilot",
-        sidebar_icon="mdi:robot-outline",
-        frontend_url_path=PANEL_URL_PATH,
-        require_admin=True,
-        config={
-            "_panel_custom": {
-                "name": "pilot-panel",
-                "js_url": PANEL_MODULE_URL,
-                "embed_iframe": False,
-                "trust_external": False,
-            }
-        },
-    )
-    hass.data[DOMAIN]["panel_registered"] = True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: PilotConfigEntry) -> bool:

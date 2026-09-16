@@ -19,6 +19,6 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 @pytest.fixture(autouse=True)
 async def setup_http(hass):
-    """Load the http component (panel static paths registration needs it)."""
+    """Load the http component (frontend/resources registration needs it)."""
     assert await async_setup_component(hass, "http", {})
     yield

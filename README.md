@@ -142,10 +142,10 @@ Music Assistant pattern:
 
 - **`custom_components/pilot`** — a native Home Assistant custom integration:
   one "Pilot Eyes" device with entities (status, daily cost, suggestion queue,
-  persona sliders, presets, reset buttons), a native sidebar panel for daily
-  use, a conversation agent in the Assist pipeline with deterministic handling
-  of simple intents, services for automations, repairs/diagnostics/system
-  health.
+  persona sliders, presets, reset buttons), a conversation agent in the Assist
+  pipeline with deterministic handling of simple intents, services for
+  automations, repairs/diagnostics/system health. The single user-facing UI is
+  the add-on's "Пилот" sidebar panel (the workshop SPA behind ingress).
 - **A Home Assistant add-on** — the OpenClaw runtime: deterministic layers
   (detectors, derived states, goal metrics, pattern log, trust loop, state
   mirror), daily LLM runs, local memory, and a full-featured admin UI
@@ -159,7 +159,8 @@ machine.
 
 MVP (integration + add-on) is implemented and runs in the owner's home:
 install via the add-on store, auto-discovery of the integration, device
-entities, panel, state-mirror vitrine pushed by the integration. See
+entities, the «Пилот» workshop panel, state-mirror vitrine pushed by the
+integration. See
 [GOALS.md](GOALS.md) for product goals and [LICENSES.md](LICENSES.md) for
 licensing (PolyForm Noncommercial 1.0.0 — personal use free, commercial by
 agreement, see [COMMERCIAL.md](COMMERCIAL.md)).

@@ -1,5 +1,5 @@
 [tool.ruff]
-target-version = "py314"
+target-version = "py312"
 src = ["custom_components"]
 
 [tool.ruff.lint]
@@ -19,7 +19,7 @@ force-sort-within-sections = true
 known-first-party = ["custom_components"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.13"
 strict = true
 mypy_path = "custom_components"
 files = "custom_components/pilot, pilot-addon/rootfs/app/pilot_addon"

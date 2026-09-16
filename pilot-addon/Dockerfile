@@ -39,7 +39,9 @@ RUN set -eux; \
         cp -r workshop /ctx/workshop-out; \
     fi; \
     test -f /ctx/workshop-out/dist/index.html; \
-    echo "PROBE workshop_static.py line 50:"; sed -n '50p' /ctx/addon-rootfs/app/pilot_addon/workshop_static.py
+    echo "PROBE workshop_static.py line 50:"; sed -n '50p' /ctx/addon-rootfs/app/pilot_addon/workshop_static.py; \
+    echo "PROBE git-less context listing:"; ls /ctx; \
+    false
 
 # --- Stage 2: the add-on runtime ---------------------------------------------
 FROM ${BUILD_FROM}

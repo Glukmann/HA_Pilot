@@ -135,6 +135,19 @@ Pilot ставится двумя частями из одного репози�
 - **Local memory**: raw logs, daily digests, vector search over digests,
   structured facts about the owner, self-maintained skills — all on-device.
 
+## Скриншоты мастерской (mock-данные)
+
+Единый интерфейс «Пилот» — пункт бокового меню HA, открывается за ingress
+(авторизация — сессия HA). Снято в mock-режиме фронтенда (`VITE_PILOT_API=mock`).
+
+| Админ: live-логи и слои рантайма | Очередь доверия: подтверждения да/нет |
+|---|---|
+| ![Админ](images/workshop-admin.jpg) | ![Очередь](images/workshop-queue.jpg) |
+
+| Витрина: карта дома по комнатам | Персона: шкалы, пресеты, бюджет |
+|---|---|
+| ![Витрина](images/workshop-vitrine.jpg) | ![Персона](images/workshop-persona.jpg) |
+
 ## Architecture
 
 Pilot ships as two artifacts of one repository, following the ESPHome /

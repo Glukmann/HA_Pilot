@@ -11,7 +11,17 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_RUNTIME_TOKEN
 from .coordinator import PilotDataUpdateCoordinator
 
-TO_REDACT = {CONF_RUNTIME_TOKEN, "token", "access_token"}
+TO_REDACT = {
+    CONF_RUNTIME_TOKEN,
+    "token",
+    "access_token",
+    "refresh_token",
+    "api_key",
+    "client_secret",
+    "password",
+    "secret",
+    "authorization",
+}
 
 
 async def async_get_config_entry_diagnostics(

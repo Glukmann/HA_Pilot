@@ -1,0 +1,4 @@
+# Supervisor source-installs build with this folder as the context; keep it
+# lean — the image always rebuilds the bundle from sources.
+workshop/node_modules
+workshop/dist

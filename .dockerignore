@@ -7,6 +7,6 @@
 **/.mypy_cache
 **/.ruff_cache
 **/node_modules
-workshop/dist
+pilot-addon/workshop/dist
 docs
 test-stand

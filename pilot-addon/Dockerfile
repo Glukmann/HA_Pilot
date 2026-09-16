@@ -1,12 +1,14 @@
 # syntax=docker/dockerfile:1
 #
 # Pilot add-on image. The build context may be either the repository root
-# (CI, local builds — the workshop SPA is then built from workshop/ sources)
-# or the add-on folder alone (Supervisor source installs — the workshop
-# stage is skipped gracefully and the UI answers 404 while the API works).
+# (CI, local builds) or the add-on folder alone (Supervisor source
+# installs) — both produce the full image with the workshop SPA, because
+# the workshop sources live inside the add-on folder (pilot-addon/workshop).
 #
 # Local build from the repo root:
 #   docker build -f pilot-addon/Dockerfile -t pilot-addon .
+# or from this folder:
+#   docker build -t pilot-addon .
 #
 # HA's builder supplies BUILD_FROM per arch (build.yaml); the default keeps
 # plain `docker build` working.
@@ -14,33 +16,27 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.21
 
 # --- Stage 1: stage the context and normalize paths -------------------------
-# Exposes /ctx/addon-rootfs (always) and /ctx/workshop-out (only when the
-# context contains workshop/ sources) so later stages can COPY blindly.
+# The workshop sources sit at pilot-addon/workshop from the repo root and at
+# workshop/ from this folder; expose both as fixed paths for later stages.
+# Fails loudly if the workshop sources are missing — the UI is not optional.
 FROM alpine:3.21 AS ctx
 WORKDIR /ctx
 COPY . .
 RUN set -eux; \
     if [ -d pilot-addon/rootfs ]; then \
         cp -r pilot-addon/rootfs /ctx/addon-rootfs; \
+        cp -r pilot-addon/workshop /ctx/workshop-out; \
     else \
         cp -r rootfs /ctx/addon-rootfs; \
-    fi; \
-    if [ -f workshop/package.json ]; then \
         cp -r workshop /ctx/workshop-out; \
-    else \
-        mkdir /ctx/workshop-out; \
-        echo "workshop sources not in build context — SPA will be skipped"; \
-    fi
+    fi; \
+    test -f /ctx/workshop-out/package.json
 
 # --- Stage 2: build the workshop SPA -----------------------------------------
 FROM node:24-alpine AS workshop
 WORKDIR /w
 COPY --from=ctx /ctx/workshop-out/ ./
-RUN if [ -f package.json ]; then \
-        npm ci && npm run build; \
-    else \
-        mkdir dist; \
-    fi
+RUN npm ci && npm run build
 
 # --- Stage 3: the add-on runtime ---------------------------------------------
 FROM ${BUILD_FROM}

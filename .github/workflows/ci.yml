@@ -65,19 +65,20 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: workshop/package-lock.json
+          cache-dependency-path: pilot-addon/workshop/package-lock.json
       - name: Install workshop dependencies
         run: npm ci
-        working-directory: workshop
+        working-directory: pilot-addon/workshop
       - name: Typecheck and build workshop SPA
         run: npm run build
-        working-directory: workshop
+        working-directory: pilot-addon/workshop
 
   workshop-bundle-check:
-    # The add-on image builds the SPA from workshop/ sources; the committed
-    # workshop/dist.sha256 must match a fresh build, otherwise a stale bundle
-    # would silently ship. Regenerate after changing the frontend:
-    #   cd workshop && npm ci && npm run build && npm run dist:hash
+    # The add-on image builds the SPA from the workshop sources inside the
+    # add-on folder; the committed pilot-addon/workshop/dist.sha256 must match
+    # a fresh build, otherwise a stale bundle would silently ship. Regenerate
+    # after changing the frontend:
+    #   cd pilot-addon/workshop && npm ci && npm run build && npm run dist:hash
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,15 +86,15 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: workshop/package-lock.json
+          cache-dependency-path: pilot-addon/workshop/package-lock.json
       - name: Install workshop dependencies
         run: npm ci
-        working-directory: workshop
+        working-directory: pilot-addon/workshop
       - name: Build workshop SPA
         run: npm run build
-        working-directory: workshop
+        working-directory: pilot-addon/workshop
       - name: Verify committed bundle hash
-        working-directory: workshop
+        working-directory: pilot-addon/workshop
         run: |
           actual="$(bash scripts/dist-hash.sh)"
           expected="$(tr -d '[:space:]' < dist.sha256)"
@@ -101,7 +102,7 @@ jobs:
             echo "::error title=Stale workshop bundle::dist.sha256 does not match a fresh build"
             echo "Committed (dist.sha256): $expected"
             echo "Fresh build:             $actual"
-            echo "Fix: cd workshop && npm ci && npm run build && npm run dist:hash, then commit dist.sha256"
+            echo "Fix: cd pilot-addon/workshop && npm ci && npm run build && npm run dist:hash, then commit dist.sha256"
             exit 1
           fi
           echo "workshop bundle hash OK: $actual"

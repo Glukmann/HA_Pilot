@@ -24,6 +24,7 @@ known-first-party = ["custom_components"]
 [tool.ruff.lint.per-file-ignores]
 "pilot-addon/rootfs/app/pilot_addon/supervisor.py" = ["RUF001"]
 "tests/test_supervisor.py" = ["RUF001"]
+"tests/test_prompts_skills.py" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.13"

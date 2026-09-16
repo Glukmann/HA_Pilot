@@ -23,6 +23,7 @@ from aiohttp import web
 from .checker import Checker, EntitySample
 from .discovery import publish_discovery
 from .http_api import create_app
+from .promptstore import seed_defaults
 from .state import RuntimeState
 from .supervisor import run_supervisor, schedule_hhmm, seconds_until
 from .trust import AuditLog, RollbackRegistry, TrustQueue
@@ -119,6 +120,10 @@ async def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     state = build_state()
+    try:
+        seed_defaults(DATA_DIR)
+    except OSError:
+        logger.exception("failed to seed prompt/skill defaults")
     checker = Checker()
     state.attach_checker(checker)
 

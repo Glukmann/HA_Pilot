@@ -22,6 +22,11 @@ base_url/api_key/model are required — without them the run is skipped
 (audit: supervisor.skipped, reason no_config). The HA API base is
 http://supervisor/core/api (Supervisor token from $SUPERVISOR_TOKEN);
 override HA_API_BASE for standalone runs and tests.
+
+The system prompt is editable: $PILOT_DATA/prompts/supervisor.md (managed
+via the workshop WS commands, seeded from pilot_addon/defaults/), with the
+bundled SYSTEM_PROMPT below as fallback. Runtime skills from
+$PILOT_DATA/skills/*/SKILL.md are prepended to the user message (16 KiB cap).
 """
 
 from __future__ import annotations
@@ -47,6 +52,7 @@ JOURNAL_TAIL_LINES = 20
 MAX_SETPOINT_DELTA = 3.0
 FRESH_FLAGS_AGE_S = 12 * 3600
 DEFAULT_SCHEDULE = "07:00"
+SKILLS_BUDGET_BYTES = 16 * 1024
 
 Broadcast = Callable[[str, Any], Awaitable[None]]
 
@@ -74,6 +80,50 @@ SYSTEM_PROMPT = """Ты — супервизор умного дома (Pilot). 
 ]}
 
 Поле decisions может быть пустым списком — если ничего делать не нужно."""
+
+
+def _system_prompt(state: RuntimeState) -> str:
+    """The editable system prompt ($PILOT_DATA/prompts/supervisor.md).
+
+    Falls back to the bundled default when the file is unreadable or empty.
+    """
+    text = _read_text(Path(state.data_dir) / "prompts" / "supervisor.md")
+    return text.strip() if text else SYSTEM_PROMPT
+
+
+def _skills_block(state: RuntimeState) -> tuple[str, bool]:
+    """Runtime skills concatenated for the user message, capped at ~16 KiB.
+
+    Returns (block, truncated): skills are taken in name order and the last
+    one is cut when the budget is exceeded.
+    """
+    skills_dir = Path(state.data_dir) / "skills"
+    chunks: list[str] = []
+    total = 0
+    truncated = False
+    if skills_dir.is_dir():
+        for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
+            text = _read_text(skill_md)
+            if text is None:
+                continue
+            piece = f"### {skill_md.parent.name}\n\n{text.strip()}\n\n"
+            size = len(piece.encode("utf-8"))
+            if total + size > SKILLS_BUDGET_BYTES:
+                truncated = True
+                break
+            chunks.append(piece)
+            total += size
+    if not chunks:
+        return "", False
+    header = "Навыки рантайма (процедуры, которым ты следуешь):\n\n"
+    return header + "".join(chunks).rstrip(), truncated
+
+
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
 
 
 class SupervisorError(Exception):
@@ -164,7 +214,13 @@ def _setpoints(state: RuntimeState) -> dict[str, float]:
     return result
 
 
-def _build_user_message(state: RuntimeState, setpoints: dict[str, float]) -> str:
+def _build_user_message(
+    state: RuntimeState, setpoints: dict[str, float]
+) -> tuple[str, bool]:
+    """User message: runtime skills first, then flags/vitrine/setpoints/journal.
+
+    Returns (message, skills_truncated).
+    """
     lines = ["Флаги отклонений (checker):"]
     lines.extend(f"- {flag}" for flag in state.flags)
     lines.append("")
@@ -178,14 +234,21 @@ def _build_user_message(state: RuntimeState, setpoints: dict[str, float]) -> str
         lines.append("")
         lines.append("Хвост журнала супервизора:")
         lines.extend(journal_tail)
-    return "\n".join(lines)
+    message = "\n".join(lines)
+    skills_block, truncated = _skills_block(state)
+    if skills_block:
+        message = f"{skills_block}\n\n---\n\n{message}"
+    return message, truncated
 
 
 # -- LLM + HA calls -----------------------------------------------------------
 
 
 async def _ask_llm(
-    session: aiohttp.ClientSession, config: dict[str, Any], user_message: str
+    session: aiohttp.ClientSession,
+    config: dict[str, Any],
+    system_prompt: str,
+    user_message: str,
 ) -> tuple[str, dict[str, Any]]:
     """One chat/completions call; returns (content, usage)."""
     base_url = str(config["base_url"]).rstrip("/")
@@ -193,7 +256,7 @@ async def _ask_llm(
     payload = {
         "model": config["model"],
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ],
         "temperature": 0,
@@ -387,12 +450,13 @@ async def run_supervisor(
 
     # LLM path: reason over flags + home snapshot.
     setpoints = _setpoints(state)
-    message = _build_user_message(state, setpoints)
+    message, skills_truncated = _build_user_message(state, setpoints)
+    system_prompt = _system_prompt(state)
     own_session = http_session is None
     session = http_session or aiohttp.ClientSession()
     try:
         try:
-            content, usage = await _ask_llm(session, config, message)
+            content, usage = await _ask_llm(session, config, system_prompt, message)
         except (SupervisorError, aiohttp.ClientError, TimeoutError) as err:
             audit.record("supervisor.error", {"error": str(err)})
             _append_journal(
@@ -499,6 +563,8 @@ async def run_supervisor(
             entry.append("На подтверждении: " + "; ".join(proposed))
         if dropped:
             entry.append(f"Отброшено невалидных решений: {dropped}")
+        if skills_truncated:
+            entry.append("Навыки обрезаны по лимиту 16 КБ")
         entry.append(cost_line)
         entry.append(
             f"Итог: {len(applied)} правок молча, {len(proposed)} на подтверждении"

@@ -22,13 +22,25 @@ Commands (client -> server), each answered with a frame of the same type:
                                        merge of values into that config file
                                        section (atomic write; a broken file is
                                        backed up as pilot.json.bad-<ts>)
+    prompts/list                    -> payload: {prompts: [{name, size,
+                                       modified_ts, is_default}]}
+    prompts/get     {name}          -> payload: {name, content}
+    prompts/set     {name, content} -> payload: {ok: true, name}
+    prompts/reset   {name}          -> payload: {ok: true, name} — restore the
+                                       bundled default
+    skills/list                     -> payload: {skills: [{name, size,
+                                       modified_ts, is_default, description}]}
+    skills/get      {name}          -> payload: {name, description, content}
+    skills/set      {name, content} -> payload: {ok: true, name}
+    skills/reset    {name}          -> payload: {ok: true, name}
 
 Server -> client events:
     log    new record for log subscribers (after logs/subscribe)
     queue  broadcast to all connections after a successful queue/confirm
     status broadcast to all connections after a successful persona/set,
-           preset/apply, budget/set, mode/set or config/set (fresh
-           state.snapshot(), so clients refresh their cards without polling)
+           preset/apply, budget/set, mode/set, config/set, prompts/set or
+           skills/set (fresh state.snapshot(), so clients refresh their
+           cards without polling)
 
 Failures (unknown command, bad JSON, bad payload, rejected confirm) answer
 {type: "error", payload: {"message"}} and the connection stays open.
@@ -48,6 +60,13 @@ from typing import Any
 from aiohttp import WSMsgType, web
 
 from .logbuffer import LogBuffer
+from .promptstore import (
+    PromptError,
+    get_entry,
+    list_entries,
+    reset_entry,
+    set_entry,
+)
 from .state import RuntimeState
 
 logger = logging.getLogger("pilot.addon")
@@ -118,7 +137,15 @@ CommandHandler = Callable[[WsSession, dict[str, Any]], Awaitable[Any]]
 # Successful setters broadcast a fresh status snapshot to every connection,
 # so all clients refresh their cards without polling.
 _STATUS_BROADCAST_COMMANDS = frozenset(
-    {"persona/set", "preset/apply", "budget/set", "mode/set", "config/set"}
+    {
+        "persona/set",
+        "preset/apply",
+        "budget/set",
+        "mode/set",
+        "config/set",
+        "prompts/set",
+        "skills/set",
+    }
 )
 
 
@@ -287,6 +314,97 @@ async def _cmd_config_set(
     return {"ok": True, "section": section}
 
 
+def _get_named(state: RuntimeState, kind: str, name: Any) -> dict[str, Any]:
+    """Shared get for prompts/skills; CommandError on bad or unknown names."""
+    try:
+        entry = get_entry(state, kind, name)
+    except PromptError as err:
+        raise CommandError(str(err)) from err
+    if entry is None:
+        raise CommandError(f"unknown {kind[:-1]}: {name}")
+    return entry
+
+
+def _set_named(
+    state: RuntimeState, kind: str, audit_event: str, payload: dict[str, Any]
+) -> str:
+    """Shared set for prompts/skills; audit and logs carry the name only."""
+    try:
+        name = set_entry(state, kind, payload.get("name"), payload.get("content"))
+    except (PromptError, OSError) as err:
+        raise CommandError(str(err)) from err
+    state.queue._audit.record(audit_event, {"name": name})
+    logger.info("%s name=%s", audit_event, name)
+    return name
+
+
+def _reset_named(
+    state: RuntimeState, kind: str, audit_event: str, payload: dict[str, Any]
+) -> str:
+    """Shared reset for prompts/skills; restores the bundled default."""
+    try:
+        name = reset_entry(state, kind, payload.get("name"))
+    except (PromptError, OSError) as err:
+        raise CommandError(str(err)) from err
+    if name is None:
+        raise CommandError(f"no bundled default for {payload.get('name')!r}")
+    state.queue._audit.record(audit_event, {"name": name})
+    logger.info("%s name=%s", audit_event, name)
+    return name
+
+
+async def _cmd_prompts_list(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    return {"prompts": list_entries(session.state, "prompts")}
+
+
+async def _cmd_prompts_get(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    return _get_named(session.state, "prompts", payload.get("name"))
+
+
+async def _cmd_prompts_set(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    name = _set_named(session.state, "prompts", "prompt.set", payload)
+    return {"ok": True, "name": name}
+
+
+async def _cmd_prompts_reset(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    name = _reset_named(session.state, "prompts", "prompt.reset", payload)
+    return {"ok": True, "name": name}
+
+
+async def _cmd_skills_list(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    return {"skills": list_entries(session.state, "skills")}
+
+
+async def _cmd_skills_get(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    return _get_named(session.state, "skills", payload.get("name"))
+
+
+async def _cmd_skills_set(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    name = _set_named(session.state, "skills", "skill.set", payload)
+    return {"ok": True, "name": name}
+
+
+async def _cmd_skills_reset(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    name = _reset_named(session.state, "skills", "skill.reset", payload)
+    return {"ok": True, "name": name}
+
+
 def _registry() -> dict[str, CommandHandler]:
     return {
         "status": _cmd_status,
@@ -302,6 +420,14 @@ def _registry() -> dict[str, CommandHandler]:
         "mode/set": _cmd_mode_set,
         "config/get": _cmd_config_get,
         "config/set": _cmd_config_set,
+        "prompts/list": _cmd_prompts_list,
+        "prompts/get": _cmd_prompts_get,
+        "prompts/set": _cmd_prompts_set,
+        "prompts/reset": _cmd_prompts_reset,
+        "skills/list": _cmd_skills_list,
+        "skills/get": _cmd_skills_get,
+        "skills/set": _cmd_skills_set,
+        "skills/reset": _cmd_skills_reset,
     }
 
 

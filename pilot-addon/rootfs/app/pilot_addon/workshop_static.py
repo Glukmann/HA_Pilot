@@ -47,7 +47,7 @@ def _safe_join(root: Path, rel: str) -> Path | None:
     try:
         target = (root / rel).resolve()
         target.relative_to(root)
-    except OSError, ValueError:
+    except (OSError, ValueError):
         return None
     return target
 

@@ -92,7 +92,7 @@ class WsSession:
             return
         try:
             await _send(self.ws, "log", entry)
-        except ConnectionResetError, RuntimeError:
+        except (ConnectionResetError, RuntimeError):
             self.unsubscribe_logs()
 
 
@@ -217,7 +217,7 @@ def attach_ws(app: web.Application, state: RuntimeState, log_buffer: LogBuffer) 
         for ws in list(connections):
             try:
                 await ws.send_str(_frame(msg_type, payload))
-            except ConnectionResetError, RuntimeError:
+            except (ConnectionResetError, RuntimeError):
                 connections.discard(ws)
 
     async def ws_handler(request: web.Request) -> web.WebSocketResponse:

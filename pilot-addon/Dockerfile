@@ -36,7 +36,9 @@ RUN set -eux; \
 FROM node:24-alpine AS workshop
 WORKDIR /w
 COPY --from=ctx /ctx/workshop-out/ ./
-RUN npm ci && npm run build
+# Retry fetches: slow/unstable links to the npm registry must not fail the build.
+RUN npm ci --fetch-retries=5 --fetch-retry-mintimeout=15000 --fetch-retry-maxtimeout=120000 --fetch-timeout=300000 \
+    && npm run build
 
 # --- Stage 3: the add-on runtime ---------------------------------------------
 FROM ${BUILD_FROM}

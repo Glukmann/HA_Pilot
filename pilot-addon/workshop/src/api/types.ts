@@ -75,3 +75,44 @@ export interface ConfigSetPayload {
   section: string;
 }
 
+/** Meta of one editable prompt (prompts/list). */
+export interface PromptMeta {
+  name: string;
+  /** Content size in bytes. */
+  size: number;
+  /** Unix seconds of the last edit; null for untouched bundled defaults. */
+  modified_ts: number | null;
+  /** True while the content still matches the bundled default. */
+  is_default: boolean;
+}
+
+/** Meta of one runtime skill (skills/list) — plus frontmatter description. */
+export interface SkillMeta extends PromptMeta {
+  description: string;
+}
+
+export interface PromptListPayload {
+  prompts: PromptMeta[];
+}
+
+export interface SkillListPayload {
+  skills: SkillMeta[];
+}
+
+export interface PromptGetPayload {
+  name: string;
+  content: string;
+}
+
+export interface SkillGetPayload {
+  name: string;
+  description: string;
+  content: string;
+}
+
+/** Ack payload of prompts/set|reset and skills/set|reset. */
+export interface AssetAckPayload {
+  ok: boolean;
+  name: string;
+}
+

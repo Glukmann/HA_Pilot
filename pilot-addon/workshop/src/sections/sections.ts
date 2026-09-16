@@ -9,7 +9,7 @@ export interface SectionMeta {
 export const SECTIONS: SectionMeta[] = [
   { path: "/channels", title: "Каналы", icon: "channels" },
   { path: "/models", title: "Модели", icon: "models" },
-  { path: "/plugins", title: "Плагины", icon: "plugins" },
+  { path: "/plugins", title: "Библиотека", icon: "plugins" },
   { path: "/persona", title: "Персона", icon: "persona" },
   { path: "/queue", title: "Очередь", icon: "queue" },
   { path: "/vitrine", title: "Витрина", icon: "vitrine" },

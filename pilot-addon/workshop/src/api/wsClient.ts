@@ -1,6 +1,15 @@
 import type { ConnectionState, PilotClient } from "./client";
 import { Emitter } from "./emitter";
-import type { LogEntry, QueuePayload, StatusSnapshot } from "./types";
+import type {
+  AssetAckPayload,
+  LogEntry,
+  PromptGetPayload,
+  PromptListPayload,
+  QueuePayload,
+  SkillGetPayload,
+  SkillListPayload,
+  StatusSnapshot,
+} from "./types";
 
 /** Reconnect backoff: 1s -> 2s -> 5s -> 10s -> 30s, then keep 30s. */
 const RECONNECT_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
@@ -59,6 +68,38 @@ export class WsPilotClient implements PilotClient {
 
   onStatus(listener: (snapshot: StatusSnapshot) => void): () => void {
     return this.statusEmitter.subscribe(listener);
+  }
+
+  listPrompts(): Promise<PromptListPayload> {
+    return this.request<PromptListPayload>("prompts/list", {});
+  }
+
+  getPrompt(name: string): Promise<PromptGetPayload> {
+    return this.request<PromptGetPayload>("prompts/get", { name });
+  }
+
+  setPrompt(name: string, content: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("prompts/set", { name, content });
+  }
+
+  resetPrompt(name: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("prompts/reset", { name });
+  }
+
+  listSkills(): Promise<SkillListPayload> {
+    return this.request<SkillListPayload>("skills/list", {});
+  }
+
+  getSkill(name: string): Promise<SkillGetPayload> {
+    return this.request<SkillGetPayload>("skills/get", { name });
+  }
+
+  setSkill(name: string, content: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("skills/set", { name, content });
+  }
+
+  resetSkill(name: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("skills/reset", { name });
   }
 
   start(): void {

@@ -2,10 +2,21 @@ import type { ConnectionState, PilotClient } from "./client";
 import { Emitter } from "./emitter";
 import { MOCK_CONFIG } from "./fixtures/config";
 import { MOCK_LOGS_RECENT, nextLiveLog } from "./fixtures/logs";
+import { DEFAULT_PROMPTS, DEFAULT_SKILLS } from "./fixtures/prompts-skills";
 import { MOCK_PROPOSAL_POOL, MOCK_QUEUE } from "./fixtures/queue";
 import { MOCK_STATUS_BASE } from "./fixtures/status";
 import { MOCK_VITRINE } from "./fixtures/vitrine";
-import type { LogEntry, QueueItem, QueuePayload, StatusSnapshot } from "./types";
+import type {
+  AssetAckPayload,
+  LogEntry,
+  PromptGetPayload,
+  PromptListPayload,
+  QueueItem,
+  QueuePayload,
+  SkillGetPayload,
+  SkillListPayload,
+  StatusSnapshot,
+} from "./types";
 
 const LATENCY_MS = 60;
 /** Slow drip of new proposals so the Queue screen stays alive in mock. */
@@ -22,6 +33,57 @@ const PRESETS: Record<string, Record<string, number>> = {
   economy: { butler_observer: 40, politeness: 60, verbosity: 30, conservative: 80 },
 };
 const MODES = ["normal", "vacation", "guests", "sick"] as const;
+
+/** Mirrors promptstore.py: slug names, 64 KiB content cap. */
+const ASSET_NAME_RE = /^[a-z0-9_-]{1,64}$/;
+const MAX_ASSET_BYTES = 64 * 1024;
+const encoder = new TextEncoder();
+
+function validateAssetName(name: unknown): string {
+  if (typeof name !== "string" || !ASSET_NAME_RE.test(name)) {
+    throw new Error("name must match [a-z0-9_-]{1,64}");
+  }
+  return name;
+}
+
+function validateAssetContent(content: unknown): string {
+  if (typeof content !== "string") {
+    throw new Error("content must be a string");
+  }
+  if (encoder.encode(content).length > MAX_ASSET_BYTES) {
+    throw new Error("content exceeds 64 KiB");
+  }
+  return content;
+}
+
+/** Minimal `---` frontmatter parser (name/description), as promptstore.py. */
+function parseFrontmatter(text: string): Record<string, string> {
+  if (!text.startsWith("---")) return {};
+  const end = text.indexOf("\n---", 3);
+  if (end === -1) return {};
+  const meta: Record<string, string> = {};
+  for (const line of text.slice(3, end).trim().split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim();
+    if (key !== "") meta[key] = line.slice(idx + 1).trim();
+  }
+  return meta;
+}
+
+interface MockAsset {
+  content: string;
+  modifiedTs: number | null;
+}
+
+function seedAssets(defaults: Record<string, string>): Map<string, MockAsset> {
+  return new Map(
+    Object.entries(defaults).map(([name, content]) => [
+      name,
+      { content, modifiedTs: null },
+    ]),
+  );
+}
 
 const SECRET_KEY_MARKERS = ["token", "secret", "password", "apikey", "api_key", "key"];
 const SECRET_MASK = "***";
@@ -93,6 +155,8 @@ export class MockPilotClient implements PilotClient {
   private dailyBudget: number;
   private costToday: number;
   private configSections: Record<string, unknown>;
+  private readonly promptStore: Map<string, MockAsset>;
+  private readonly skillStore: Map<string, MockAsset>;
   private readonly connectionEmitter = new Emitter<ConnectionState>();
   private readonly logEmitter = new Emitter<LogEntry>();
   private readonly queueEmitter = new Emitter<QueuePayload>();
@@ -107,6 +171,8 @@ export class MockPilotClient implements PilotClient {
     this.configSections = JSON.parse(
       JSON.stringify(MOCK_CONFIG.sections),
     ) as Record<string, unknown>;
+    this.promptStore = seedAssets(DEFAULT_PROMPTS);
+    this.skillStore = seedAssets(DEFAULT_SKILLS);
   }
 
   getConnectionState(): ConnectionState {
@@ -127,6 +193,40 @@ export class MockPilotClient implements PilotClient {
 
   onStatus(listener: (snapshot: StatusSnapshot) => void): () => void {
     return this.statusEmitter.subscribe(listener);
+  }
+
+  // Editable library: system prompts and runtime skills.
+
+  listPrompts(): Promise<PromptListPayload> {
+    return this.request<PromptListPayload>("prompts/list", {});
+  }
+
+  getPrompt(name: string): Promise<PromptGetPayload> {
+    return this.request<PromptGetPayload>("prompts/get", { name });
+  }
+
+  setPrompt(name: string, content: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("prompts/set", { name, content });
+  }
+
+  resetPrompt(name: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("prompts/reset", { name });
+  }
+
+  listSkills(): Promise<SkillListPayload> {
+    return this.request<SkillListPayload>("skills/list", {});
+  }
+
+  getSkill(name: string): Promise<SkillGetPayload> {
+    return this.request<SkillGetPayload>("skills/get", { name });
+  }
+
+  setSkill(name: string, content: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("skills/set", { name, content });
+  }
+
+  resetSkill(name: string): Promise<AssetAckPayload> {
+    return this.request<AssetAckPayload>("skills/reset", { name });
   }
 
   start(): void {
@@ -283,6 +383,68 @@ export class MockPilotClient implements PilotClient {
         this.statusEmitter.emit(this.buildStatus());
         return;
       }
+      case "prompts/list":
+        resolve({ prompts: this.listAssets("prompts") } as T);
+        return;
+      case "prompts/get":
+        try {
+          resolve(this.getAsset("prompts", payload.name) as T);
+        } catch (err) {
+          reject(err as Error);
+        }
+        return;
+      case "prompts/set":
+        try {
+          const name = validateAssetName(payload.name);
+          const content = validateAssetContent(payload.content);
+          this.promptStore.set(name, {
+            content,
+            modifiedTs: Date.now() / 1000,
+          });
+          resolve({ ok: true, name } as T);
+          this.statusEmitter.emit(this.buildStatus());
+        } catch (err) {
+          reject(err as Error);
+        }
+        return;
+      case "prompts/reset":
+        try {
+          resolve({ ok: true, name: this.resetAsset("prompts", payload.name) } as T);
+        } catch (err) {
+          reject(err as Error);
+        }
+        return;
+      case "skills/list":
+        resolve({ skills: this.listAssets("skills") } as T);
+        return;
+      case "skills/get":
+        try {
+          resolve(this.getAsset("skills", payload.name) as T);
+        } catch (err) {
+          reject(err as Error);
+        }
+        return;
+      case "skills/set":
+        try {
+          const name = validateAssetName(payload.name);
+          const content = validateAssetContent(payload.content);
+          this.skillStore.set(name, {
+            content,
+            modifiedTs: Date.now() / 1000,
+          });
+          resolve({ ok: true, name } as T);
+          this.statusEmitter.emit(this.buildStatus());
+        } catch (err) {
+          reject(err as Error);
+        }
+        return;
+      case "skills/reset":
+        try {
+          resolve({ ok: true, name: this.resetAsset("skills", payload.name) } as T);
+        } catch (err) {
+          reject(err as Error);
+        }
+        return;
       default:
         reject(new Error(`unknown command: ${type}`));
     }
@@ -292,6 +454,51 @@ export class MockPilotClient implements PilotClient {
   private ackSetter<T>(resolve: (value: T) => void): void {
     resolve({ ok: true } as T);
     this.statusEmitter.emit(this.buildStatus());
+  }
+
+  private listAssets(kind: "prompts" | "skills"): Array<Record<string, unknown>> {
+    const store = kind === "prompts" ? this.promptStore : this.skillStore;
+    const defaults = kind === "prompts" ? DEFAULT_PROMPTS : DEFAULT_SKILLS;
+    return [...store.keys()].sort().map((name) => {
+      const asset = store.get(name);
+      if (asset === undefined) return {};
+      const entry: Record<string, unknown> = {
+        name,
+        size: encoder.encode(asset.content).length,
+        modified_ts: asset.modifiedTs,
+        is_default: asset.content === defaults[name],
+      };
+      if (kind === "skills") {
+        entry.description = parseFrontmatter(asset.content).description ?? "";
+      }
+      return entry;
+    });
+  }
+
+  private getAsset(kind: "prompts" | "skills", name: unknown): Record<string, unknown> {
+    const clean = validateAssetName(name);
+    const store = kind === "prompts" ? this.promptStore : this.skillStore;
+    const asset = store.get(clean);
+    if (asset === undefined) {
+      throw new Error(`unknown ${kind === "prompts" ? "prompt" : "skill"}: ${clean}`);
+    }
+    const entry: Record<string, unknown> = { name: clean, content: asset.content };
+    if (kind === "skills") {
+      entry.description = parseFrontmatter(asset.content).description ?? "";
+    }
+    return entry;
+  }
+
+  private resetAsset(kind: "prompts" | "skills", name: unknown): string {
+    const clean = validateAssetName(name);
+    const defaults = kind === "prompts" ? DEFAULT_PROMPTS : DEFAULT_SKILLS;
+    const defaultContent = defaults[clean];
+    if (defaultContent === undefined) {
+      throw new Error(`no bundled default for '${clean}'`);
+    }
+    const store = kind === "prompts" ? this.promptStore : this.skillStore;
+    store.set(clean, { content: defaultContent, modifiedTs: Date.now() / 1000 });
+    return clean;
   }
 
   private isOnboarded(): boolean {

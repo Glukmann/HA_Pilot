@@ -1,4 +1,13 @@
-import type { LogEntry, QueuePayload, StatusSnapshot } from "./types";
+import type {
+  AssetAckPayload,
+  LogEntry,
+  PromptGetPayload,
+  PromptListPayload,
+  QueuePayload,
+  SkillGetPayload,
+  SkillListPayload,
+  StatusSnapshot,
+} from "./types";
 
 export type ConnectionState =
   | "connecting"
@@ -34,6 +43,16 @@ export interface PilotClient {
    * callers get a stable Promise API anyway.
    */
   request<T>(type: string, payload?: Record<string, unknown>): Promise<T>;
+
+  // Editable library: system prompts and runtime skills.
+  listPrompts(): Promise<PromptListPayload>;
+  getPrompt(name: string): Promise<PromptGetPayload>;
+  setPrompt(name: string, content: string): Promise<AssetAckPayload>;
+  resetPrompt(name: string): Promise<AssetAckPayload>;
+  listSkills(): Promise<SkillListPayload>;
+  getSkill(name: string): Promise<SkillGetPayload>;
+  setSkill(name: string, content: string): Promise<AssetAckPayload>;
+  resetSkill(name: string): Promise<AssetAckPayload>;
 
   start(): void;
   stop(): void;

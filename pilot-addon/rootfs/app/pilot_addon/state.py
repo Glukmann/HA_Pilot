@@ -110,8 +110,26 @@ class RuntimeState:
         self.current_focus = ""
         self.daily_budget = 10.0
         self.cost_today = 0.0
+        self.cost_day = time.strftime("%Y-%m-%d", time.localtime())
+        self.supervisor_status: dict[str, Any] = {
+            "last_run_ts": None,
+            "last_decisions": 0,
+        }
         self.vitrine = VitrineState()
         self.flags: list[str] = []
+
+    def reset_cost_if_new_day(self) -> bool:
+        """Reset cost_today on the first event of a new local day.
+
+        Called by the daily supervisor run — the only LLM spender, so its
+        budget guard always sees today's figure.
+        """
+        today = time.strftime("%Y-%m-%d", time.localtime())
+        if today == self.cost_day:
+            return False
+        self.cost_day = today
+        self.cost_today = 0.0
+        return True
 
     # -- persona / policy -------------------------------------------------
     @property
@@ -190,4 +208,8 @@ class RuntimeState:
             "flags": list(self.flags),
             "uptime_s": int(time.time() - self.started_ts),
             "layers": self.layers_status(),
+            "supervisor": {
+                **self.supervisor_status,
+                "cost_today": round(self.cost_today, 4),
+            },
         }

@@ -1,4 +1,4 @@
-"""Tests for the live checker pipeline: vitrine -> flags -> trust queue."""
+"""Tests for the live checker pipeline: vitrine -> flags -> supervisor."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 import time
 
 from pilot_addon.checker import Checker
-from pilot_addon.main import build_state, run_checker_pass, run_supervisor_tick
+from pilot_addon.main import build_state, run_checker_pass
 from pilot_addon.state import RuntimeState
 
 DEAD_SENSOR_AGE_S = 7 * 3600  # beyond the 6 h sensor_dead threshold
@@ -85,8 +85,13 @@ async def test_gate_stuck_only_flags_gate_like_entities(tmp_path):
     assert "gate_stuck:switch.heater" not in flags
 
 
-async def test_daily_tick_dedupes_pending_flags(tmp_path):
-    """The supervisor proposes each pending flag once, not daily copies."""
+async def test_flags_alone_do_not_enqueue_proposals(tmp_path):
+    """Flags are advisory until the daily supervisor run proposes actions.
+
+    The old raw flag->queue stub is gone: the checker pass only updates
+    state.flags (visible in status), the queue stays empty until an LLM
+    supervisor run decides otherwise.
+    """
     old = time.time() - DEAD_SENSOR_AGE_S
     state, checker = _setup(
         tmp_path,
@@ -97,13 +102,5 @@ async def test_daily_tick_dedupes_pending_flags(tmp_path):
     )
     await run_checker_pass(state, checker)
     assert len(state.flags) == 2
-
-    await run_supervisor_tick(state, checker)
-    await run_supervisor_tick(state, checker)  # next day: flags still pending
-    assert state.queue_size == 2
-
-    # Once the owner resolves an item, the next tick may propose it again.
-    resolved = state.queue.items[0].id
-    state.queue.confirm(resolved, "no")
-    await run_supervisor_tick(state, checker)
-    assert state.queue_size == 2
+    assert state.queue_size == 0
+    assert state.snapshot()["flags"] == state.flags

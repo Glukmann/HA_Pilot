@@ -1,19 +1,21 @@
 """Entry point of the Pilot add-on runtime.
 
 Composition: HTTP API (the integration contract) + vitrine mirror +
-deterministic checker loop + daily supervisor scheduler. The LLM supervisor
-run is Phase 4 scope: the scheduler fires once a day and records the run
-intent; the OpenClaw agent execution wires in with the full workspace
-(Phase 4 hardening).
+deterministic checker loop + daily LLM supervisor run. The supervisor
+(docs/2026-09-13-supervisor-design.md) reasons over checker flags once a
+day: whitelisted setpoints apply silently, everything else lands in the
+trust queue for the owner.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import logging
 import os
 from pathlib import Path
 import time
+from typing import Any
 
 import aiohttp
 from aiohttp import web
@@ -22,6 +24,7 @@ from .checker import Checker, EntitySample
 from .discovery import publish_discovery
 from .http_api import create_app
 from .state import RuntimeState
+from .supervisor import run_supervisor, schedule_hhmm, seconds_until
 from .trust import AuditLog, RollbackRegistry, TrustQueue
 from .vitrine import VitrineMirror
 
@@ -91,27 +94,22 @@ async def checker_loop(
         await asyncio.sleep(interval_s)
 
 
-async def run_supervisor_tick(state: RuntimeState, checker: Checker) -> None:
-    """Daily supervisor run: budget guard, then flags -> queue proposals."""
-    if state.cost_today >= state.daily_budget:
-        state.queue._audit.record("supervisor.skipped", {"reason": "budget"})
-        return
-    for flag in state.flags:
-        state.queue.propose(
-            title=f"Supervisor: {flag}",
-            action={"type": "supervisor_flag", "flag": flag},
-            summary="Daily supervisor proposal",
-        )
-    state.queue._audit.record("supervisor.tick", {"flags": len(state.flags)})
+async def supervisor_scheduler(
+    state: RuntimeState,
+    get_broadcast: Callable[[], Any] | None = None,
+) -> None:
+    """Fire the LLM supervisor daily at the configured local time.
 
-
-async def daily_scheduler(state: RuntimeState, checker: Checker, hour: int = 7) -> None:
-    """Fire the supervisor once a day at the given local hour."""
+    Never raises: a failed run is logged and retried the next day.
+    """
     while True:
-        now = asyncio.get_event_loop().time()
-        # Simple interval-based approximation; a production cron pins the hour.
-        await asyncio.sleep(24 * 3600 - (now % (24 * 3600)))
-        await run_supervisor_tick(state, checker)
+        hh, mm = schedule_hhmm(state)
+        await asyncio.sleep(seconds_until(hh, mm))
+        try:
+            broadcast = get_broadcast() if get_broadcast else None
+            await run_supervisor(state, broadcast=broadcast)
+        except Exception:
+            logger.exception("supervisor run failed")  # soft degradation
 
 
 async def main() -> None:
@@ -136,7 +134,6 @@ async def main() -> None:
         )
         tasks.append(asyncio.create_task(mirror.run()))
     tasks.append(asyncio.create_task(checker_loop(state, checker)))
-    tasks.append(asyncio.create_task(daily_scheduler(state, checker)))
 
     app = create_app(state)
     runner = web.AppRunner(app)
@@ -147,6 +144,12 @@ async def main() -> None:
         "Pilot add-on %s (build ws.1) listening on port %s",
         state.runtime_version,
         os.environ.get("PORT", "8899"),
+    )
+
+    tasks.append(
+        asyncio.create_task(
+            supervisor_scheduler(state, lambda: app.get("ws_broadcast"))
+        )
     )
 
     async with aiohttp.ClientSession() as session:

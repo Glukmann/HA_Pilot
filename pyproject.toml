@@ -18,6 +18,13 @@ select = [
 force-sort-within-sections = true
 known-first-party = ["custom_components"]
 
+# The supervisor speaks Russian by design (system prompt and journal format,
+# docs/2026-09-13-supervisor-design.md §4); its strings trip the ambiguous
+# Cyrillic/Latin lookalike check. Comments and identifiers stay ASCII.
+[tool.ruff.lint.per-file-ignores]
+"pilot-addon/rootfs/app/pilot_addon/supervisor.py" = ["RUF001"]
+"tests/test_supervisor.py" = ["RUF001"]
+
 [tool.mypy]
 python_version = "3.13"
 strict = true

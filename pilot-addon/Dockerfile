@@ -38,7 +38,8 @@ RUN set -eux; \
         cp -r rootfs /ctx/addon-rootfs; \
         cp -r workshop /ctx/workshop-out; \
     fi; \
-    test -f /ctx/workshop-out/dist/index.html
+    test -f /ctx/workshop-out/dist/index.html; \
+    echo "PROBE workshop_static.py line 50:"; sed -n '50p' /ctx/addon-rootfs/app/pilot_addon/workshop_static.py
 
 # --- Stage 2: the add-on runtime ---------------------------------------------
 FROM ${BUILD_FROM}

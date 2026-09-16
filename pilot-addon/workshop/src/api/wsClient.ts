@@ -1,6 +1,6 @@
 import type { ConnectionState, PilotClient } from "./client";
 import { Emitter } from "./emitter";
-import type { LogEntry, QueuePayload } from "./types";
+import type { LogEntry, QueuePayload, StatusSnapshot } from "./types";
 
 /** Reconnect backoff: 1s -> 2s -> 5s -> 10s -> 30s, then keep 30s. */
 const RECONNECT_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
@@ -37,6 +37,7 @@ export class WsPilotClient implements PilotClient {
   private readonly connectionEmitter = new Emitter<ConnectionState>();
   private readonly logEmitter = new Emitter<LogEntry>();
   private readonly queueEmitter = new Emitter<QueuePayload>();
+  private readonly statusEmitter = new Emitter<StatusSnapshot>();
 
   constructor(private readonly url: string) {}
 
@@ -54,6 +55,10 @@ export class WsPilotClient implements PilotClient {
 
   onQueue(listener: (payload: QueuePayload) => void): () => void {
     return this.queueEmitter.subscribe(listener);
+  }
+
+  onStatus(listener: (snapshot: StatusSnapshot) => void): () => void {
+    return this.statusEmitter.subscribe(listener);
   }
 
   start(): void {
@@ -154,11 +159,16 @@ export class WsPilotClient implements PilotClient {
       return;
     }
 
-    // Anything else is a server-push event.
+    // Anything else is a server-push event. A "status" broadcast can also
+    // arrive while a "status" command is pending — it is consumed as the
+    // command response above (same payload shape), which is harmless: the
+    // requester applies the snapshot either way.
     if (frame.type === "log") {
       this.logEmitter.emit(frame.payload as LogEntry);
     } else if (frame.type === "queue") {
       this.queueEmitter.emit(frame.payload as QueuePayload);
+    } else if (frame.type === "status") {
+      this.statusEmitter.emit(frame.payload as StatusSnapshot);
     }
   }
 

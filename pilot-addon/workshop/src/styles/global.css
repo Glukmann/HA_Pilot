@@ -495,3 +495,151 @@ body {
 .logs-empty .btn {
   display: inline-block;
 }
+
+
+/* ---- persona ----------------------------------------------------------- */
+
+.card-title {
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.card-title-row .card-title {
+  margin-bottom: 0;
+}
+
+.save-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 230px) 1fr 100px;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.slider-row + .slider-row {
+  border-top: 1px solid var(--border);
+}
+
+.slider-label {
+  font-size: 13px;
+}
+
+.slider-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.slider {
+  width: 100%;
+  height: 20px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.slider:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.slider-value {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.preset-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.preset-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.input-narrow {
+  min-width: 110px;
+  width: 130px;
+}
+
+.form-unit {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* ---- config sections (read-only) ---------------------------------------- */
+
+.cfg-tree {
+  font-size: 13px;
+}
+
+.cfg-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 280px) 1fr;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.cfg-key {
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfg-value {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.cfg-secret {
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+}
+
+.cfg-group > .cfg-group-key {
+  font-weight: 600;
+  padding: 4px 0 2px;
+}
+
+.cfg-children {
+  margin: 0 0 6px 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}

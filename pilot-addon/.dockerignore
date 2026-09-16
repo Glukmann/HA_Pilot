@@ -1,4 +1,3 @@
 # Supervisor source-installs build with this folder as the context; keep it
-# lean — the image always rebuilds the bundle from sources.
+# lean — the SPA dist is committed to git and copied as-is.
 workshop/node_modules
-workshop/dist

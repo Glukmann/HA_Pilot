@@ -1,5 +1,5 @@
 # Build context for `docker build -f pilot-addon/Dockerfile .` (repo root).
-# Keep the context lean; the workshop dist is rebuilt inside the image.
+# Keep the context lean; node_modules never enter the build.
 .git
 .venv
 **/__pycache__
@@ -7,6 +7,5 @@
 **/.mypy_cache
 **/.ruff_cache
 **/node_modules
-pilot-addon/workshop/dist
 docs
 test-stand

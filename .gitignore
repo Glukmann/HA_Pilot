@@ -16,7 +16,6 @@ __pycache__/
 
 # Workshop frontend (sources live inside the add-on folder)
 pilot-addon/workshop/node_modules/
-pilot-addon/workshop/dist/
 
 # Workshop bundle copied into the add-on package for local test builds
 pilot-addon/rootfs/app/pilot_addon/workshop_dist/

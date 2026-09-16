@@ -125,7 +125,7 @@ async def test_contract_routes_win_over_spa_fallback(addon) -> None:
             msg = await asyncio.wait_for(ws.receive(), timeout=5)
             reply = json.loads(msg.data)
             assert reply["type"] == "status"
-            assert reply["payload"]["runtime_version"] == "0.5.0"
+            assert reply["payload"]["runtime_version"] == state.runtime_version
 
 
 async def test_missing_dist_404s_cleanly(tmp_path, socket_enabled) -> None:

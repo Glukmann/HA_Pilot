@@ -336,6 +336,9 @@ def attach_ws(app: web.Application, state: RuntimeState, log_buffer: LogBuffer) 
             except (ConnectionResetError, RuntimeError):
                 connections.discard(ws)
 
+    # Lets non-WS producers (the daily supervisor run) push status events.
+    app["ws_broadcast"] = broadcast
+
     async def ws_handler(request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse()
         await ws.prepare(request)

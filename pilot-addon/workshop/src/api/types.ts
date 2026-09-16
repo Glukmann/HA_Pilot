@@ -29,6 +29,8 @@ export interface StatusSnapshot {
   flags: string[];
   uptime_s: number;
   layers: LayersStatus;
+  /** True once the supervisor config section has base_url+api_key+model. */
+  onboarded: boolean;
 }
 
 export interface LogEntry {
@@ -66,3 +68,10 @@ export interface ConfigPayload {
   /** Free-form config sections (channels/models/plugins), already masked. */
   sections: Record<string, unknown>;
 }
+
+/** Ack payload of config/set. */
+export interface ConfigSetPayload {
+  ok: boolean;
+  section: string;
+}
+

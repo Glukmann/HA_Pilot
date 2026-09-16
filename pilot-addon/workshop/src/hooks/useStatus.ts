@@ -37,9 +37,16 @@ export function useStatus(client: PilotClient): {
     const offConn = client.onConnectionChange((state) => {
       if (state === "connected") load();
     });
+    // Live refresh: every successful setter (persona/set, preset/apply,
+    // budget/set, mode/set) makes the server broadcast a fresh snapshot.
+    const offStatus = client.onStatus((snapshot) => {
+      setStatus(snapshot);
+      setError(null);
+    });
     return () => {
       clearInterval(interval);
       offConn();
+      offStatus();
     };
   }, [client, load]);
 

@@ -54,3 +54,15 @@ export interface VitrinePayload {
   fresh: boolean;
   lines: string[];
 }
+
+/** Ack payload of the setter commands (persona/set, preset/apply, ...). */
+export interface OkPayload {
+  ok: boolean;
+}
+
+/** Response of config/get; secrets are masked server-side to "***". */
+export interface ConfigPayload {
+  configured: boolean;
+  /** Free-form config sections (channels/models/plugins), already masked. */
+  sections: Record<string, unknown>;
+}

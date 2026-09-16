@@ -10,11 +10,21 @@ Commands (client -> server), each answered with a frame of the same type:
     logs/recent     {limit?}        -> payload: [entry, ...] (tail of the buffer)
     logs/subscribe                  -> ack, then a {type: "log"} event per record
     logs/unsubscribe                -> ack; log events stop
+    persona/set     {slider, value} -> payload: {"ok": true} (a persona slider)
+    preset/apply    {preset}        -> payload: {"ok": true} (persona preset)
+    budget/set      {value}         -> payload: {"ok": true} (daily LLM budget)
+    mode/set        {mode}          -> payload: {"ok": true} (home mode)
+    config/get                      -> payload: {configured, sections} — the
+                                       runtime config file with secret values
+                                       masked ("***"); configured:false when
+                                       the file is absent or not valid JSON
 
 Server -> client events:
     log    new record for log subscribers (after logs/subscribe)
     queue  broadcast to all connections after a successful queue/confirm
-    status reserved for server push; currently only the command response
+    status broadcast to all connections after a successful persona/set,
+           preset/apply, budget/set or mode/set (fresh state.snapshot(),
+           so clients refresh their cards without polling)
 
 Failures (unknown command, bad JSON, bad payload, rejected confirm) answer
 {type: "error", payload: {"message"}} and the connection stays open.
@@ -98,6 +108,12 @@ class WsSession:
 
 CommandHandler = Callable[[WsSession, dict[str, Any]], Awaitable[Any]]
 
+# Successful setters broadcast a fresh status snapshot to every connection,
+# so all clients refresh their cards without polling.
+_STATUS_BROADCAST_COMMANDS = frozenset(
+    {"persona/set", "preset/apply", "budget/set", "mode/set"}
+)
+
 
 def _queue_payload(state: RuntimeState) -> dict[str, Any]:
     return {"items": [item.as_dict() for item in state.queue.items]}
@@ -155,6 +171,99 @@ async def _cmd_logs_unsubscribe(
     return {"ok": True}
 
 
+async def _cmd_persona_set(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        slider = str(payload["slider"])
+        value = int(payload["value"])
+    except KeyError as err:
+        raise CommandError(f"missing field: {err.args[0]}") from err
+    except (TypeError, ValueError) as err:
+        raise CommandError("value must be an integer") from err
+    try:
+        session.state.set_persona(slider, value)
+    except ValueError as err:
+        raise CommandError(str(err)) from err
+    return {"ok": True}
+
+
+async def _cmd_preset_apply(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        preset = str(payload["preset"])
+    except KeyError as err:
+        raise CommandError(f"missing field: {err.args[0]}") from err
+    try:
+        session.state.apply_preset(preset)
+    except ValueError as err:
+        raise CommandError(str(err)) from err
+    return {"ok": True}
+
+
+async def _cmd_budget_set(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        value = float(payload["value"])
+    except KeyError as err:
+        raise CommandError(f"missing field: {err.args[0]}") from err
+    except (TypeError, ValueError) as err:
+        raise CommandError("value must be a number") from err
+    session.state.daily_budget = value
+    return {"ok": True}
+
+
+async def _cmd_mode_set(session: WsSession, payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        mode = str(payload["mode"])
+    except KeyError as err:
+        raise CommandError(f"missing field: {err.args[0]}") from err
+    try:
+        session.state.set_mode(mode)
+    except ValueError as err:
+        raise CommandError(str(err)) from err
+    return {"ok": True}
+
+
+_SECRET_KEY_MARKERS = ("token", "secret", "password", "apikey", "api_key", "key")
+_SECRET_MASK = "***"
+
+
+def _is_secret_key(key: str) -> bool:
+    lowered = key.lower()
+    return any(marker in lowered for marker in _SECRET_KEY_MARKERS)
+
+
+def _mask_secrets(node: Any) -> Any:
+    """Deep-copy a config structure, masking values under secret-looking keys.
+
+    Keys are never dropped — the UI shows that a setting exists, just not
+    its value. A secret key masks its whole value (string or container).
+    """
+    if isinstance(node, dict):
+        return {
+            key: _SECRET_MASK if _is_secret_key(str(key)) else _mask_secrets(value)
+            for key, value in node.items()
+        }
+    if isinstance(node, list):
+        return [_mask_secrets(item) for item in node]
+    return node
+
+
+async def _cmd_config_get(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        raw = json.loads(session.state.config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"configured": False, "sections": {}}
+    if not isinstance(raw, dict):
+        return {"configured": False, "sections": {}}
+    return {"configured": True, "sections": _mask_secrets(raw)}
+
+
 def _registry() -> dict[str, CommandHandler]:
     return {
         "status": _cmd_status,
@@ -164,6 +273,11 @@ def _registry() -> dict[str, CommandHandler]:
         "logs/recent": _cmd_logs_recent,
         "logs/subscribe": _cmd_logs_subscribe,
         "logs/unsubscribe": _cmd_logs_unsubscribe,
+        "persona/set": _cmd_persona_set,
+        "preset/apply": _cmd_preset_apply,
+        "budget/set": _cmd_budget_set,
+        "mode/set": _cmd_mode_set,
+        "config/get": _cmd_config_get,
     }
 
 
@@ -205,6 +319,8 @@ async def _dispatch(
     await _send(ws, cmd, result)
     if cmd == "queue/confirm" and isinstance(result, dict) and result.get("ok"):
         await broadcast("queue", _queue_payload(session.state))
+    elif cmd in _STATUS_BROADCAST_COMMANDS:
+        await broadcast("status", session.state.snapshot())
 
 
 def attach_ws(app: web.Application, state: RuntimeState, log_buffer: LogBuffer) -> None:

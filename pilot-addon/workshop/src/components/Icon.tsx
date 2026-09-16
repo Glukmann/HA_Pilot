@@ -3,6 +3,7 @@ export type IconName =
   | "models"
   | "plugins"
   | "persona"
+  | "queue"
   | "vitrine"
   | "admin";
 
@@ -25,6 +26,10 @@ const PATHS: Record<IconName, string[]> = {
   persona: [
     "M19.5 21v-1.5a4 4 0 0 0-4-4h-7a4 4 0 0 0-4 4V21",
     "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  ],
+  queue: [
+    "M8 6h13M8 12h13M8 18h13",
+    "M3.5 6h.01M3.5 12h.01M3.5 18h.01",
   ],
   vitrine: ["M3 3h18v18H3z", "M3 9h18", "M9 3v18"],
   admin: ["M22 12h-4l-3 9L9 3l-3 9H2"],

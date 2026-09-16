@@ -1,4 +1,4 @@
-import type { LogEntry, QueuePayload } from "./types";
+import type { LogEntry, QueuePayload, StatusSnapshot } from "./types";
 
 export type ConnectionState =
   | "connecting"
@@ -21,6 +21,12 @@ export interface PilotClient {
   onLog(listener: (entry: LogEntry) => void): () => void;
   /** Server-push event: queue changed after a successful queue/confirm. */
   onQueue(listener: (payload: QueuePayload) => void): () => void;
+  /**
+   * Server-push event: fresh status snapshot, broadcast to every
+   * connection after each successful setter (persona/set, preset/apply,
+   * budget/set, mode/set).
+   */
+  onStatus(listener: (snapshot: StatusSnapshot) => void): () => void;
 
   /**
    * Send a command and resolve with its response payload. The underlying

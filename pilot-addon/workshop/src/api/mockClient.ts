@@ -1,17 +1,33 @@
 import type { ConnectionState, PilotClient } from "./client";
 import { Emitter } from "./emitter";
+import { MOCK_CONFIG } from "./fixtures/config";
 import { MOCK_LOGS_RECENT, nextLiveLog } from "./fixtures/logs";
-import { MOCK_QUEUE } from "./fixtures/queue";
+import { MOCK_PROPOSAL_POOL, MOCK_QUEUE } from "./fixtures/queue";
 import { MOCK_STATUS_BASE } from "./fixtures/status";
 import { MOCK_VITRINE } from "./fixtures/vitrine";
-import type { LogEntry, QueuePayload, StatusSnapshot } from "./types";
+import type { LogEntry, QueueItem, QueuePayload, StatusSnapshot } from "./types";
 
 const LATENCY_MS = 60;
+/** Slow drip of new proposals so the Queue screen stays alive in mock. */
+const PROPOSAL_INTERVAL_MS = 60_000;
+/** Cost drift cadence, so the budget block looks alive in mock. */
+const COST_DRIFT_MS = 45_000;
+const MAX_MOCK_QUEUE = 3;
+
+const SLIDERS = ["butler_observer", "politeness", "verbosity", "conservative"] as const;
+const PRESETS: Record<string, Record<string, number>> = {
+  // Mirrors PERSONA_PRESETS in the add-on (state.py).
+  butler: { butler_observer: 80, politeness: 30, verbosity: 70, conservative: 40 },
+  observer: { butler_observer: 10, politeness: 20, verbosity: 20, conservative: 70 },
+  economy: { butler_observer: 40, politeness: 60, verbosity: 30, conservative: 80 },
+};
+const MODES = ["normal", "vacation", "guests", "sick"] as const;
 
 /**
  * Fixture-backed client: same contract as WsPilotClient, but answers from
- * local data and emits synthetic live log events. Selected with
- * VITE_PILOT_API=mock so the frontend can be developed without the add-on.
+ * local data and emits synthetic live events (log stream, queue changes,
+ * status broadcasts after setters). Selected with VITE_PILOT_API=mock so
+ * the frontend can be developed without the add-on.
  */
 export class MockPilotClient implements PilotClient {
   readonly mode = "mock" as const;
@@ -20,9 +36,28 @@ export class MockPilotClient implements PilotClient {
   private startedAtMs = 0;
   private logTimer: ReturnType<typeof setTimeout> | null = null;
   private logSubscribed = false;
+  private queueItems: QueueItem[] = [];
+  private proposalTimer: ReturnType<typeof setTimeout> | null = null;
+  private proposalIndex = 0;
+  private costTimer: ReturnType<typeof setTimeout> | null = null;
+  private cabinetLightOn = true;
+  private persona: Record<string, number>;
+  private personaPreset: string;
+  private pilotMode: string;
+  private dailyBudget: number;
+  private costToday: number;
   private readonly connectionEmitter = new Emitter<ConnectionState>();
   private readonly logEmitter = new Emitter<LogEntry>();
   private readonly queueEmitter = new Emitter<QueuePayload>();
+  private readonly statusEmitter = new Emitter<StatusSnapshot>();
+
+  constructor() {
+    this.persona = { ...MOCK_STATUS_BASE.persona };
+    this.personaPreset = MOCK_STATUS_BASE.persona_preset;
+    this.pilotMode = MOCK_STATUS_BASE.mode;
+    this.dailyBudget = MOCK_STATUS_BASE.daily_budget;
+    this.costToday = MOCK_STATUS_BASE.cost_today;
+  }
 
   getConnectionState(): ConnectionState {
     return this.state;
@@ -40,18 +75,27 @@ export class MockPilotClient implements PilotClient {
     return this.queueEmitter.subscribe(listener);
   }
 
+  onStatus(listener: (snapshot: StatusSnapshot) => void): () => void {
+    return this.statusEmitter.subscribe(listener);
+  }
+
   start(): void {
     if (this.state !== "disconnected") return;
     this.startedAtMs = Date.now();
+    this.queueItems = MOCK_QUEUE.map((item) => ({ ...item }));
     this.setState("connecting");
     setTimeout(() => {
       this.setState("connected");
       this.scheduleLog();
+      this.scheduleProposal();
+      this.scheduleCostDrift();
     }, 250);
   }
 
   stop(): void {
     this.clearLogTimer();
+    this.clearProposalTimer();
+    this.clearCostTimer();
     this.logSubscribed = false;
     this.setState("disconnected");
   }
@@ -91,29 +135,103 @@ export class MockPilotClient implements PilotClient {
         resolve({ ok: true } as T);
         return;
       case "queue/get":
-        resolve({ items: MOCK_QUEUE } as T);
+        resolve({ items: this.queueItems.map((item) => ({ ...item })) } as T);
         return;
       case "queue/confirm": {
         const id = String(payload.id ?? "");
-        if (MOCK_QUEUE.some((item) => item.id === id)) {
-          resolve({ ok: true } as T);
-        } else {
+        const index = this.queueItems.findIndex((item) => item.id === id);
+        if (index === -1) {
           reject(new Error("not found"));
+          return;
         }
+        this.queueItems.splice(index, 1);
+        resolve({ ok: true } as T);
+        // The real server broadcasts a fresh queue to every connection
+        // after a successful confirm; mimic that (ourselves included).
+        this.queueEmitter.emit({ items: this.queueItems.map((item) => ({ ...item })) });
         return;
       }
       case "vitrine/get":
-        resolve(MOCK_VITRINE as T);
+        resolve(this.buildVitrine() as T);
+        return;
+      case "persona/set": {
+        const slider = String(payload.slider ?? "");
+        if (!SLIDERS.includes(slider as (typeof SLIDERS)[number])) {
+          reject(new Error(`unknown slider: ${slider}`));
+          return;
+        }
+        const value = Number(payload.value);
+        if (!Number.isInteger(value)) {
+          reject(new Error("value must be an integer"));
+          return;
+        }
+        // set_persona in the add-on clamps to 0..100.
+        this.persona[slider] = Math.max(0, Math.min(100, value));
+        this.ackSetter(resolve);
+        return;
+      }
+      case "preset/apply": {
+        const preset = String(payload.preset ?? "");
+        const values = PRESETS[preset];
+        if (values === undefined) {
+          reject(new Error(`unknown preset: ${preset}`));
+          return;
+        }
+        this.persona = { ...values };
+        this.personaPreset = preset;
+        this.ackSetter(resolve);
+        return;
+      }
+      case "budget/set": {
+        const value = Number(payload.value);
+        if (!Number.isFinite(value)) {
+          reject(new Error("value must be a number"));
+          return;
+        }
+        this.dailyBudget = value;
+        this.ackSetter(resolve);
+        return;
+      }
+      case "mode/set": {
+        const mode = String(payload.mode ?? "");
+        if (!MODES.includes(mode as (typeof MODES)[number])) {
+          reject(new Error(`unknown mode: ${mode}`));
+          return;
+        }
+        this.pilotMode = mode;
+        this.ackSetter(resolve);
+        return;
+      }
+      case "config/get":
+        resolve({
+          configured: MOCK_CONFIG.configured,
+          sections: JSON.parse(
+            JSON.stringify(MOCK_CONFIG.sections),
+          ) as Record<string, unknown>,
+        } as T);
         return;
       default:
         reject(new Error(`unknown command: ${type}`));
     }
   }
 
+  /** Setter ack followed by the status broadcast, like the real server. */
+  private ackSetter<T>(resolve: (value: T) => void): void {
+    resolve({ ok: true } as T);
+    this.statusEmitter.emit(this.buildStatus());
+  }
+
   private buildStatus(): StatusSnapshot {
     const nowS = Date.now() / 1000;
     return {
       ...MOCK_STATUS_BASE,
+      persona: { ...this.persona },
+      persona_preset: this.personaPreset,
+      mode: this.pilotMode,
+      daily_budget: this.dailyBudget,
+      cost_today: Math.round(this.costToday * 10_000) / 10_000,
+      queue_size: this.queueItems.length,
+      awaiting_confirmation: this.queueItems.length > 0,
       uptime_s:
         MOCK_STATUS_BASE.uptime_s +
         Math.floor((Date.now() - this.startedAtMs) / 1000),
@@ -122,6 +240,22 @@ export class MockPilotClient implements PilotClient {
         checker: { alive: true, last_run_ts: nowS - 27 },
         trust: { alive: true, last_run_ts: nowS - 640 },
       },
+    };
+  }
+
+  private buildVitrine() {
+    // Fresh copy each poll, with one entity drifting so the 10s refresh
+    // is visible in mock mode.
+    if (Math.random() < 0.5) {
+      this.cabinetLightOn = !this.cabinetLightOn;
+    }
+    return {
+      fresh: MOCK_VITRINE.fresh,
+      lines: MOCK_VITRINE.lines.map((line) =>
+        line.startsWith("  Свет кабинета:")
+          ? `  Свет кабинета: ${this.cabinetLightOn ? "on" : "off"}`
+          : line,
+      ),
     };
   }
 
@@ -135,10 +269,52 @@ export class MockPilotClient implements PilotClient {
     }, 900 + Math.random() * 2200);
   }
 
+  private scheduleProposal(): void {
+    this.clearProposalTimer();
+    this.proposalTimer = setTimeout(() => {
+      if (this.state === "connected" && this.queueItems.length < MAX_MOCK_QUEUE) {
+        const template = MOCK_PROPOSAL_POOL[this.proposalIndex % MOCK_PROPOSAL_POOL.length];
+        this.proposalIndex += 1;
+        if (!this.queueItems.some((item) => item.id === template.id)) {
+          this.queueItems.push({ ...template, created_ts: Date.now() / 1000 });
+          this.queueEmitter.emit({
+            items: this.queueItems.map((item) => ({ ...item })),
+          });
+        }
+      }
+      this.scheduleProposal();
+    }, PROPOSAL_INTERVAL_MS);
+  }
+
+  private scheduleCostDrift(): void {
+    this.clearCostTimer();
+    this.costTimer = setTimeout(() => {
+      if (this.state === "connected") {
+        this.costToday += 0.05 + Math.random() * 0.35;
+        this.statusEmitter.emit(this.buildStatus());
+      }
+      this.scheduleCostDrift();
+    }, COST_DRIFT_MS * (0.8 + Math.random() * 0.4));
+  }
+
   private clearLogTimer(): void {
     if (this.logTimer !== null) {
       clearTimeout(this.logTimer);
       this.logTimer = null;
+    }
+  }
+
+  private clearProposalTimer(): void {
+    if (this.proposalTimer !== null) {
+      clearTimeout(this.proposalTimer);
+      this.proposalTimer = null;
+    }
+  }
+
+  private clearCostTimer(): void {
+    if (this.costTimer !== null) {
+      clearTimeout(this.costTimer);
+      this.costTimer = null;
     }
   }
 

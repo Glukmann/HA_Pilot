@@ -8,6 +8,7 @@ confirmation queue and audit log are append-only files.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 import time
 from typing import Any
 
@@ -101,7 +102,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.5.1"
+        self.runtime_version = "0.6.0"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -113,6 +114,11 @@ class RuntimeState:
         self.flags: list[str] = []
 
     # -- persona / policy -------------------------------------------------
+    @property
+    def config_path(self) -> Path:
+        """Runtime configuration file behind the WS config/get command."""
+        return Path(self.data_dir) / "pilot.json"
+
     def set_persona(self, slider: str, value: int) -> None:
         if slider not in PERSONA_SLIDERS:
             raise ValueError(f"unknown slider: {slider}")

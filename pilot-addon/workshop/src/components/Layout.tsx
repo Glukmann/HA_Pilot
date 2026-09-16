@@ -37,6 +37,9 @@ export function Layout() {
           <span className={client.mode === "mock" ? "mode-chip" : "mode-dim"}>
             {client.mode === "mock" ? "режим: mock-данные" : "источник: аддон"}
           </span>
+          <NavLink to="/onboarding" className="footer-link">
+            Настройка
+          </NavLink>
         </div>
       </aside>
       <div className="main">

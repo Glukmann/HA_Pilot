@@ -816,3 +816,255 @@ select.input {
   border-color: var(--err);
   color: var(--err);
 }
+
+
+/* ---- onboarding wizard --------------------------------------------------- */
+
+.footer-link {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: var(--accent);
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.wizard {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: var(--bg);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px 64px;
+}
+
+.wizard-card {
+  width: 100%;
+  max-width: 620px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 28px 20px;
+}
+
+.wizard-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.wizard-brand .brand-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.wizard-brand .brand-sub {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.wizard-progress {
+  display: flex;
+  gap: 6px;
+  margin: 18px 0 18px;
+}
+
+.wizard-step {
+  flex: 1;
+  padding: 6px 4px 0;
+  border: none;
+  border-top: 2px solid var(--border);
+  background: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-family: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.wizard-step:disabled {
+  cursor: default;
+}
+
+.wizard-progress-active {
+  color: var(--accent);
+  border-top-color: var(--accent);
+}
+
+.wizard-progress-done {
+  color: var(--text-dim);
+  border-top-color: var(--ok);
+}
+
+.wizard-card h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.wizard-card p {
+  color: var(--text-dim);
+  margin: 0 0 12px;
+}
+
+.wizard-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.wizard-list li {
+  position: relative;
+  padding: 6px 0 6px 18px;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+}
+
+.wizard-list li:first-child {
+  border-top: none;
+}
+
+.wizard-list li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.wizard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wizard-form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wizard-field {
+  flex: 1;
+  min-width: 200px;
+}
+
+.wizard-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.wizard-field .input {
+  width: 100%;
+}
+
+.wizard-field-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 3px;
+}
+
+.input-time {
+  min-width: 120px;
+  width: 130px;
+  color-scheme: dark;
+}
+
+.wizard-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.wizard-preset {
+  text-align: left;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.wizard-preset:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.wizard-preset-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.wizard-preset-name {
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+
+.wizard-preset-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.wizard-summary {
+  margin: 0 0 12px;
+}
+
+.wizard-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.wizard-summary-row:first-child {
+  border-top: none;
+}
+
+.wizard-summary-value {
+  color: var(--text-dim);
+}
+
+.wizard-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.wizard-skip {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.wizard-skip:hover {
+  color: var(--accent);
+}

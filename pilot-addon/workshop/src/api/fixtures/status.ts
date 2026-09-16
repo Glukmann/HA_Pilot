@@ -20,4 +20,5 @@ export const MOCK_STATUS_BASE: Omit<StatusSnapshot, "uptime_s" | "layers"> & {
   current_focus: "",
   flags: [],
   uptime_s: 3730,
+  onboarded: false,
 };

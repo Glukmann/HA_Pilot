@@ -23,6 +23,52 @@ const PRESETS: Record<string, Record<string, number>> = {
 };
 const MODES = ["normal", "vacation", "guests", "sick"] as const;
 
+const SECRET_KEY_MARKERS = ["token", "secret", "password", "apikey", "api_key", "key"];
+const SECRET_MASK = "***";
+
+function isSecretKey(key: string): boolean {
+  const lowered = key.toLowerCase();
+  return SECRET_KEY_MARKERS.some((marker) => lowered.includes(marker));
+}
+
+/** Masks values under secret-looking keys, like the server (ws_api.py). */
+function maskSecrets(node: unknown): unknown {
+  if (Array.isArray(node)) {
+    return node.map(maskSecrets);
+  }
+  if (node !== null && typeof node === "object") {
+    return Object.fromEntries(
+      Object.entries(node).map(([key, value]) => [
+        key,
+        isSecretKey(key) ? SECRET_MASK : maskSecrets(value),
+      ]),
+    );
+  }
+  return node;
+}
+
+/** Deep-merge of config values into one section (mirrors the server). */
+function deepMerge(
+  base: Record<string, unknown>,
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...base };
+  for (const [key, value] of Object.entries(values)) {
+    const existing = out[key];
+    const bothObjects =
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      existing !== null &&
+      typeof existing === "object" &&
+      !Array.isArray(existing);
+    out[key] = bothObjects
+      ? deepMerge(existing as Record<string, unknown>, value as Record<string, unknown>)
+      : value;
+  }
+  return out;
+}
+
 /**
  * Fixture-backed client: same contract as WsPilotClient, but answers from
  * local data and emits synthetic live events (log stream, queue changes,
@@ -46,6 +92,7 @@ export class MockPilotClient implements PilotClient {
   private pilotMode: string;
   private dailyBudget: number;
   private costToday: number;
+  private configSections: Record<string, unknown>;
   private readonly connectionEmitter = new Emitter<ConnectionState>();
   private readonly logEmitter = new Emitter<LogEntry>();
   private readonly queueEmitter = new Emitter<QueuePayload>();
@@ -57,6 +104,9 @@ export class MockPilotClient implements PilotClient {
     this.pilotMode = MOCK_STATUS_BASE.mode;
     this.dailyBudget = MOCK_STATUS_BASE.daily_budget;
     this.costToday = MOCK_STATUS_BASE.cost_today;
+    this.configSections = JSON.parse(
+      JSON.stringify(MOCK_CONFIG.sections),
+    ) as Record<string, unknown>;
   }
 
   getConnectionState(): ConnectionState {
@@ -204,12 +254,35 @@ export class MockPilotClient implements PilotClient {
       }
       case "config/get":
         resolve({
-          configured: MOCK_CONFIG.configured,
-          sections: JSON.parse(
-            JSON.stringify(MOCK_CONFIG.sections),
+          configured: true,
+          sections: maskSecrets(
+            JSON.parse(JSON.stringify(this.configSections)),
           ) as Record<string, unknown>,
         } as T);
         return;
+      case "config/set": {
+        const section = payload.section;
+        if (typeof section !== "string" || section === "") {
+          reject(new Error("section must be a non-empty string"));
+          return;
+        }
+        const values = payload.values;
+        if (values === null || typeof values !== "object" || Array.isArray(values)) {
+          reject(new Error("values must be an object"));
+          return;
+        }
+        const existing = this.configSections[section];
+        const base =
+          existing !== null && typeof existing === "object" && !Array.isArray(existing)
+            ? (existing as Record<string, unknown>)
+            : {};
+        this.configSections[section] = deepMerge(base, values as Record<string, unknown>);
+        resolve({ ok: true, section } as T);
+        // A successful set broadcasts a fresh status (with the new
+        // onboarded flag), like the real server.
+        this.statusEmitter.emit(this.buildStatus());
+        return;
+      }
       default:
         reject(new Error(`unknown command: ${type}`));
     }
@@ -219,6 +292,19 @@ export class MockPilotClient implements PilotClient {
   private ackSetter<T>(resolve: (value: T) => void): void {
     resolve({ ok: true } as T);
     this.statusEmitter.emit(this.buildStatus());
+  }
+
+  private isOnboarded(): boolean {
+    const supervisor = this.configSections.supervisor;
+    if (
+      supervisor === null ||
+      typeof supervisor !== "object" ||
+      Array.isArray(supervisor)
+    ) {
+      return false;
+    }
+    const section = supervisor as Record<string, unknown>;
+    return Boolean(section.base_url) && Boolean(section.api_key) && Boolean(section.model);
   }
 
   private buildStatus(): StatusSnapshot {
@@ -232,6 +318,7 @@ export class MockPilotClient implements PilotClient {
       cost_today: Math.round(this.costToday * 10_000) / 10_000,
       queue_size: this.queueItems.length,
       awaiting_confirmation: this.queueItems.length > 0,
+      onboarded: this.isOnboarded(),
       uptime_s:
         MOCK_STATUS_BASE.uptime_s +
         Math.floor((Date.now() - this.startedAtMs) / 1000),

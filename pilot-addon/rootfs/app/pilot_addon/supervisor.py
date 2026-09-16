@@ -85,11 +85,8 @@ class SupervisorError(Exception):
 
 def load_supervisor_config(state: RuntimeState) -> dict[str, Any] | None:
     """Return the supervisor config section, or None when unusable."""
-    try:
-        raw = json.loads(state.config_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(raw, dict):
+    raw = state.read_config()
+    if raw is None:
         return None
     section = raw.get("supervisor")
     if not isinstance(section, dict):

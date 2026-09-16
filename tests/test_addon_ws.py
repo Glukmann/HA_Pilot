@@ -83,8 +83,8 @@ async def test_ws_vitrine_get_command(addon) -> None:
 async def test_ws_queue_get_and_confirm(addon) -> None:
     """queue/get lists items; queue/confirm resolves them."""
     state, port = addon
-    first = state.queue.propose("First?", {"type": "switch"})
-    second = state.queue.propose("Second?", {"type": "switch"})
+    first = state.queue.propose("First?", {"type": "switch", "flag": "first"})
+    second = state.queue.propose("Second?", {"type": "switch", "flag": "second"})
     async with aiohttp.ClientSession() as session:
         async with session.ws_connect(f"http://127.0.0.1:{port}/ws") as ws:
             reply = await _rpc(ws, "queue/get", {})

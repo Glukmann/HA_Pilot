@@ -1,9 +1,10 @@
 """Entry point of the Pilot add-on runtime.
 
 Composition: HTTP API (the integration contract) + vitrine mirror +
-daily supervisor scheduler. The LLM supervisor run is Phase 4 scope: the
-scheduler fires once a day and records the run intent; the OpenClaw agent
-execution wires in with the full workspace (Phase 4 hardening).
+deterministic checker loop + daily supervisor scheduler. The LLM supervisor
+run is Phase 4 scope: the scheduler fires once a day and records the run
+intent; the OpenClaw agent execution wires in with the full workspace
+(Phase 4 hardening).
 """
 
 from __future__ import annotations
@@ -12,11 +13,12 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+import time
 
 import aiohttp
 from aiohttp import web
 
-from .checker import Checker
+from .checker import Checker, EntitySample
 from .discovery import publish_discovery
 from .http_api import create_app
 from .state import RuntimeState
@@ -44,6 +46,49 @@ def build_state(data_dir: Path = DATA_DIR) -> RuntimeState:
         TrustQueue(audit=audit, rollback=rollback, apply_action=_apply_action)
     )
     return state
+
+
+async def run_checker_pass(state: RuntimeState, checker: Checker) -> list[str]:
+    """One checker iteration: vitrine -> deviation flags (state.flags).
+
+    The flag list is fully replaced on every pass — a flag disappears as
+    soon as its condition goes away. Called by the periodic loop and by
+    tests directly (no sleeping involved).
+    """
+    now = time.time()
+    samples: list[EntitySample] = []
+    for eid, sample in state.vitrine.states.items():
+        if not isinstance(sample, dict):
+            continue
+        try:
+            changed_ts = float(sample.get("last_changed") or now)
+        except (TypeError, ValueError):
+            changed_ts = now
+        attrs = sample.get("attrs")
+        samples.append(
+            EntitySample(
+                entity_id=eid,
+                state=str(sample.get("state", "")),
+                attrs=attrs if isinstance(attrs, dict) else {},
+                last_changed_ts=changed_ts,
+            )
+        )
+    flags = checker.flags_for(samples)
+    state.flags = flags
+    state.queue._audit.record("checker.run", {"flags": len(flags), "flag_list": flags})
+    return flags
+
+
+async def checker_loop(
+    state: RuntimeState, checker: Checker, interval_s: float = 300
+) -> None:
+    """Run the deterministic checker periodically; never raises."""
+    while True:
+        try:
+            await run_checker_pass(state, checker)
+        except Exception:
+            logger.exception("checker pass failed")  # soft degradation
+        await asyncio.sleep(interval_s)
 
 
 async def run_supervisor_tick(state: RuntimeState, checker: Checker) -> None:
@@ -90,6 +135,7 @@ async def main() -> None:
             out_file=DATA_DIR / "vitrine.txt",
         )
         tasks.append(asyncio.create_task(mirror.run()))
+    tasks.append(asyncio.create_task(checker_loop(state, checker)))
     tasks.append(asyncio.create_task(daily_scheduler(state, checker)))
 
     app = create_app(state)

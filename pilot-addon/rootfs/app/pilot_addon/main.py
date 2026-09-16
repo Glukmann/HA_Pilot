@@ -98,7 +98,7 @@ async def main() -> None:
     site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", "8899")))
     await site.start()
     logger.info(
-        "Pilot add-on %s listening on port %s",
+        "Pilot add-on %s (build ws.1) listening on port %s",
         state.runtime_version,
         os.environ.get("PORT", "8899"),
     )

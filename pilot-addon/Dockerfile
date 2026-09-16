@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 #
 # Pilot add-on image. The build context may be either the repository root
 # (CI, local builds) or the add-on folder alone (Supervisor source
@@ -23,10 +22,12 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.21
 
 # --- Stage 1: stage the context and normalize paths -------------------------
+# Uses ${BUILD_FROM} (ghcr.io) rather than a Docker Hub image: hosts behind
+# flaky links to docker.io must still build (the Hub is the usual timeout).
 # The workshop sits at pilot-addon/workshop from the repo root and at
 # workshop/ from this folder; expose both as fixed paths for later stages.
 # Fails loudly if the committed SPA dist is missing — the UI is not optional.
-FROM alpine:3.21 AS ctx
+FROM ${BUILD_FROM} AS ctx
 WORKDIR /ctx
 COPY . .
 RUN set -eux; \

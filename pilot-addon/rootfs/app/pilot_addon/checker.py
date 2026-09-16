@@ -20,6 +20,19 @@ DEFAULT_THRESHOLDS: dict[str, Any] = {
     "gate_stuck_s": 10 * 60,
 }
 
+# Impulse-relay hint: gate_stuck only applies to entities that look like
+# gates/garage/doors — a plain heater or fan left on must not flag.
+GATE_MARKERS = (
+    "gate",
+    "garage",
+    "door",
+    "kalitka",
+    "vorota",
+    "калитк",
+    "ворот",
+    "двер",
+)
+
 
 @dataclass
 class EntitySample:
@@ -87,11 +100,24 @@ class Checker:
         )
 
     def check_gate_stuck(self, sample: EntitySample, now: float | None = None) -> bool:
-        """Impulse relay (gate/intercom) ON longer than the threshold."""
+        """Impulse relay (gate/garage/door) ON longer than the threshold.
+
+        Only applies to entities that look like impulse relays (entity id or
+        friendly name) — in a real home plenty of devices stay on for hours
+        by design, and flagging them would be pure noise.
+        """
         now = now or time.time()
         if sample.state != "on":
             return False
+        if not self._looks_like_gate(sample):
+            return False
         return bool(now - sample.last_changed_ts > self.thresholds["gate_stuck_s"])
+
+    @staticmethod
+    def _looks_like_gate(sample: EntitySample) -> bool:
+        friendly_name = str(sample.attrs.get("friendly_name", ""))
+        haystack = f"{sample.entity_id} {friendly_name}".lower()
+        return any(marker in haystack for marker in GATE_MARKERS)
 
     def check_energy_spike(
         self, entity_id: str, daily_kwh: float, now: float | None = None

@@ -69,6 +69,22 @@ def test_rollback_restores_previous(tmp_path):
     assert queue.rollback_last("unknown") is False
 
 
+def test_propose_dedupes_same_action(tmp_path):
+    """A proposal whose action is already queued returns the existing item."""
+    queue, _audit, _rb, _applied = _make_trust(tmp_path)
+    action = {"type": "supervisor_flag", "flag": "sensor_dead:x"}
+    first = queue.propose("Supervisor: sensor_dead:x", action)
+    again = queue.propose("Supervisor: sensor_dead:x", dict(action))
+    assert len(queue.items) == 1
+    assert again == first
+    # A different action still queues normally.
+    other = queue.propose(
+        "Supervisor: gate_stuck:y", {"type": "supervisor_flag", "flag": "gate_stuck:y"}
+    )
+    assert len(queue.items) == 2
+    assert other != first
+
+
 def test_queue_item_serialization():
     item = QueueItem(id="abc", title="T", summary="S")
     assert item.as_dict()["id"] == "abc"

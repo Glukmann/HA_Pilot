@@ -94,12 +94,20 @@ class TrustQueue:
         self.last_change_ts: float | None = None
 
     def propose(self, title: str, action: dict[str, Any], summary: str = "") -> str:
-        """Add a proposal; auto-apply if whitelisted, else queue for yes/no."""
+        """Add a proposal; auto-apply if whitelisted, else queue for yes/no.
+
+        Deduplicates: a proposal whose action is already queued returns the
+        existing item's id instead of adding a copy — the daily supervisor
+        must not re-propose a flag that is still awaiting the owner's answer.
+        """
         item_id = uuid.uuid4().hex[:12]
         self.last_change_ts = time.time()
         if self._whitelisted(action):
             self._apply(action, confirmed_by="whitelist")
             return item_id
+        for item in self.items:
+            if item.action == action:
+                return item.id
         item = QueueItem(id=item_id, title=title, summary=summary, action=action)
         self.items.append(item)
         self._audit.record("queue.proposed", {"id": item_id, "title": title})

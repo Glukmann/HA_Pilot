@@ -28,7 +28,7 @@ from .supervisor import _accrue_cost, _ask_llm, load_supervisor_config
 
 logger = logging.getLogger("pilot.addon")
 
-MAX_VITRINE_LINES = 120
+MAX_VITRINE_LINES = 300
 
 CHAT_SYSTEM_PROMPT = """Ты — Пилот, голосовой жилец умного дома. Хозяин пишет \
 тебе из чата Home Assistant. У тебя есть актуальная карта дома (витрина).
@@ -77,9 +77,16 @@ async def chat_ask(
             "error": "budget",
         }
 
-    lines = state.vitrine.lines[-MAX_VITRINE_LINES:]
+    all_lines = state.vitrine.lines
+    lines = all_lines[-MAX_VITRINE_LINES:]
+    header = "Карта дома (витрина):"
+    if len(lines) < len(all_lines):
+        header += (
+            f" (показаны последние {len(lines)} из {len(all_lines)} строк —"
+            " дом больше окна контекста)"
+        )
     user_message = "\n".join(
-        ["Карта дома (витрина):", *lines, "", f"Сообщение хозяина: {message}"]
+        [header, *lines, "", f"Сообщение хозяина: {message}"]
     )
     own_session = http_session is None
     session = http_session or aiohttp.ClientSession()

@@ -48,7 +48,7 @@ logger = logging.getLogger("pilot.addon")
 
 HA_API_BASE = os.environ.get("HA_API_BASE", "http://supervisor/core/api")
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=60)
-MAX_VITRINE_LINES = 120
+MAX_VITRINE_LINES = 300
 JOURNAL_TAIL_LINES = 20
 MAX_SETPOINT_DELTA = 3.0
 FRESH_FLAGS_AGE_S = 12 * 3600

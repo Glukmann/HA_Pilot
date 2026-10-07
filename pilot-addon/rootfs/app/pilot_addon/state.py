@@ -114,8 +114,10 @@ class VitrineState:
         for eid, sample in sorted(self.states.items()):
             name = sample.get("attrs", {}).get("friendly_name") or eid
             state = sample.get("state", "?")
+            unit = sample.get("attrs", {}).get("unit_of_measurement")
+            rendered = f"{state} {unit}" if unit else str(state)
             area = sample.get("area") or "No room"
-            groups.setdefault(area, []).append(f"  {name}: {state}")
+            groups.setdefault(area, []).append(f"  {name}: {rendered}")
         lines: list[str] = []
         for area in sorted(groups, key=lambda a: (a == "No room", a)):
             lines.append(f"{area}:")
@@ -141,7 +143,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.12.1"
+        self.runtime_version = "0.12.2"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"

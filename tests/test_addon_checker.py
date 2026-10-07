@@ -3,6 +3,7 @@
 import time
 
 from pilot_addon.checker import Checker, EntitySample
+from pilot_addon.state import VitrineState
 
 NOW = time.time()
 
@@ -143,3 +144,31 @@ def test_energy_non_kwh_units_ignored():
         last_changed_ts=NOW,
     )
     assert checker.flags_for([sample], NOW) == []
+
+
+def test_vitrine_lines_render_units():
+    """Battery/humidity readings must carry their unit — no '96 degrees' mixups."""
+    vitrine = VitrineState()
+    vitrine.update(
+        {
+            "sensor.temp_battery": {
+                "state": "96",
+                "attrs": {"friendly_name": "Котёл Батарея", "unit_of_measurement": "%"},
+                "area": "Кабинет",
+            },
+            "sensor.temp": {
+                "state": "22.4",
+                "attrs": {"friendly_name": "Котёл t°", "unit_of_measurement": "°C"},
+                "area": "Кабинет",
+            },
+            "switch.plain": {
+                "state": "on",
+                "attrs": {"friendly_name": "Насос"},
+                "area": "Кабинет",
+            },
+        }
+    )
+    lines = vitrine.lines
+    assert "  Котёл Батарея: 96 %" in lines
+    assert "  Котёл t°: 22.4 °C" in lines
+    assert "  Насос: on" in lines  # unitless entities stay bare

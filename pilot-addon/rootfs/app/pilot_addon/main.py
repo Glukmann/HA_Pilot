@@ -168,11 +168,13 @@ async def norm_loop(state: RuntimeState, interval_s: float = 1800) -> None:
     one-proposal-a-day cap) keep the owner unsolicited most of the time.
     """
     from .norms import propose_deviations, propose_norms
+    from .reflexion import run_reflexion
 
     while True:
         try:
             propose_norms(state)
             propose_deviations(state)
+            await run_reflexion(state)
         except Exception:
             logger.exception("norm detection failed")  # soft degradation
         await asyncio.sleep(interval_s)

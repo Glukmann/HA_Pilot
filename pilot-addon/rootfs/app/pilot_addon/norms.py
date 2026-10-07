@@ -157,12 +157,40 @@ def record_decision(state: Any, action: dict[str, Any], decision: str) -> None:
         return
     meta = _load_meta(state)
     bucket = "accepted" if decision == "yes" else "declined"
+    if action.get("type") == "pattern":
+        counts = meta.setdefault("pattern_decisions", {"accepted": 0, "declined": 0})
+        if isinstance(counts, dict):
+            counts[bucket] = int(counts.get(bucket) or 0) + 1
     decided = meta.setdefault("decided", {"accepted": [], "declined": []})
     signature = _signature(action)
     if signature in decided["accepted"] or signature in decided["declined"]:
+        _save_meta(state, meta)  # счётчики уже обновили — сохранить
         return
     decided[bucket] = (decided[bucket] + [signature])[-200:]
     _save_meta(state, meta)
+
+
+def _daily_cap(meta: dict[str, Any]) -> tuple[int, bool]:
+    """Proposal cadence from the owner's accept rate (cycle 5).
+
+    Returns (cap_per_day, rare): high accept rate (>=0.7 on >=5 norm
+    decisions) earns two proposals a day; low (<=0.3) throttles to one
+    per two days. Below five decisions the neutral 1/day applies.
+    """
+    counts = meta.get("pattern_decisions")
+    if not isinstance(counts, dict):
+        return 1, False
+    accepted = int(counts.get("accepted") or 0)
+    declined = int(counts.get("declined") or 0)
+    total = accepted + declined
+    if total < 5:
+        return 1, False
+    rate = accepted / total
+    if rate >= 0.7:
+        return 2, False
+    if rate <= 0.3:
+        return 1, True
+    return 1, False
 
 
 def _decided(state: Any, bucket: str) -> set[str]:
@@ -210,8 +238,14 @@ def propose_norms(
         return []
     meta = _load_meta(state)
     today = time.strftime("%Y-%m-%d", time.localtime(now))
-    if meta.get("last_proposal_day") == today:
+    cap, rare = _daily_cap(meta)
+    proposals = meta.get("proposals")
+    proposals = proposals if isinstance(proposals, dict) else {}
+    if proposals.get("day") == today and int(proposals.get("count") or 0) >= cap:
         return []
+    yesterday = time.strftime("%Y-%m-%d", time.localtime(now - DAY_S))
+    if rare and proposals.get("day") == yesterday:
+        return []  # низкий accept-rate: не чаще одной нормы в два дня
 
     proposed: list[str] = []
     decided = _decided(state, "accepted") | _decided(state, "declined")
@@ -253,11 +287,16 @@ def propose_norms(
         )
         proposed.append(item_id)
         meta["last_proposal_day"] = today
+        same_day = proposals.get("day") == today
+        meta["proposals"] = {
+            "day": today,
+            "count": (int(proposals.get("count") or 0) + 1) if same_day else 1,
+        }
         meta.setdefault("proposed_titles", [])
         meta["proposed_titles"] = (meta["proposed_titles"] + [title])[-20:]
         _save_meta(state, meta)
         logger.info("norm proposed: %s", title)
-        break  # лимитер назойливости: одна норма в день
+        break  # лимитер назойливости: одна норма за прогон
     return proposed
 
 

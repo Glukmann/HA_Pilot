@@ -120,7 +120,7 @@ def create_app(
             state.queue.reset_stats()
         elif target == "all":
             state.current_focus = ""
-            state.cost_today = 0.0
+            state.reset_cost()
             state.flags.clear()
             state.queue.clear()
             state.queue.reset_stats()

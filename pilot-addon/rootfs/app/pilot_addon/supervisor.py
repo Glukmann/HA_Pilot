@@ -375,7 +375,7 @@ def _accrue_cost(
     price_out = config.get("price_output_per_1m")
     if isinstance(price_in, (int, float)) and isinstance(price_out, (int, float)):
         cost = (tokens_in * float(price_in) + tokens_out * float(price_out)) / 1_000_000
-        state.cost_today += cost
+        state.accrue_cost(cost)
     return tokens_in, tokens_out, cost
 
 

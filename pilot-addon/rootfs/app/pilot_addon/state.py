@@ -144,7 +144,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.13.0"
+        self.runtime_version = "0.13.1"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -153,6 +153,7 @@ class RuntimeState:
         self.daily_budget = 10.0
         self.cost_today = 0.0
         self.cost_day = time.strftime("%Y-%m-%d", time.localtime())
+        self._load_cost(Path(data_dir) / "cost.json")
         self.supervisor_status: dict[str, Any] = {
             "last_run_ts": None,
             "last_decisions": 0,
@@ -160,6 +161,43 @@ class RuntimeState:
         self.vitrine = VitrineState()
         self.flags: list[str] = []
         self.sessions = ChatSessions(Path(data_dir))
+
+    # -- cost accounting (persisted: the budget guard must survive restarts) --
+    def _load_cost(self, path: Path) -> None:
+        self._cost_path = path
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(raw, dict):
+            return
+        day = raw.get("day")
+        if day == self.cost_day:
+            try:
+                self.cost_today = float(raw.get("total") or 0.0)
+            except (TypeError, ValueError):
+                pass
+
+    def _save_cost(self) -> None:
+        try:
+            tmp = self._cost_path.with_name(self._cost_path.name + ".tmp")
+            tmp.write_text(
+                json.dumps({"day": self.cost_day, "total": self.cost_today}),
+                encoding="utf-8",
+            )
+            tmp.replace(self._cost_path)
+        except OSError:
+            pass  # cost persistence is best-effort; the guard tolerates it
+
+    def accrue_cost(self, amount: float) -> None:
+        """Add LLM spend to today's counter and persist it."""
+        self.cost_today += amount
+        self._save_cost()
+
+    def reset_cost(self) -> None:
+        """Zero the daily counter (Reset all) and persist."""
+        self.cost_today = 0.0
+        self._save_cost()
 
     def reset_cost_if_new_day(self) -> bool:
         """Reset cost_today on the first event of a new local day.
@@ -172,6 +210,7 @@ class RuntimeState:
             return False
         self.cost_day = today
         self.cost_today = 0.0
+        self._save_cost()
         return True
 
     # -- persona / policy -------------------------------------------------

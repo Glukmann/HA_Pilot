@@ -116,9 +116,8 @@ class TrustQueue:
             lambda action: action.get("type") in WHITELISTED_ACTIONS
         )
         self._path = path
+        self._stats_path = path.with_name("learning.json") if path is not None else None
         self.last_change_ts: float | None = None
-        if path is not None:
-            self._restore(path)
         # Learning stats: the raw material for persona adaptation (Phase 6).
         # Counts every decision path; by_kind breaks accept/reject down per
         # action kind (setpoint / proposal / domain of the target entity).
@@ -129,6 +128,9 @@ class TrustQueue:
             "applied_silent": 0,
         }
         self.stats_by_kind: dict[str, dict[str, int]] = {}
+        if path is not None:
+            self._restore(path)
+            self._restore_stats()
 
     def as_learning(self) -> dict[str, Any]:
         """Learning stats snapshot for status/UI; copies, never references."""
@@ -142,6 +144,7 @@ class TrustQueue:
         for key in self.stats:
             self.stats[key] = 0
         self.stats_by_kind.clear()
+        self._save_stats()
 
     @staticmethod
     def _kind_key(action: dict[str, Any]) -> str:
@@ -157,6 +160,7 @@ class TrustQueue:
                 self._kind_key(action), {"accepted": 0, "rejected": 0}
             )
             bucket[counter] += 1
+        self._save_stats()
 
     def _restore(self, path: Path) -> None:
         """Rebuild the queue from the persistence file (best effort)."""
@@ -192,6 +196,44 @@ class TrustQueue:
             tmp.replace(self._path)
         except OSError:
             logger.exception("queue persistence failed")
+
+    def _restore_stats(self) -> None:
+        """Rebuild learning stats from disk (best effort)."""
+        if self._stats_path is None:
+            return
+        try:
+            raw = json.loads(self._stats_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(raw, dict):
+            return
+        totals = raw.get("total")
+        if isinstance(totals, dict):
+            for key, value in totals.items():
+                if isinstance(value, int) and key in self.stats:
+                    self.stats[key] = value
+        by_kind = raw.get("by_kind")
+        if isinstance(by_kind, dict):
+            for kind, bucket in by_kind.items():
+                if isinstance(kind, str) and isinstance(bucket, dict):
+                    self.stats_by_kind[kind] = {
+                        "accepted": int(bucket.get("accepted") or 0),
+                        "rejected": int(bucket.get("rejected") or 0),
+                    }
+
+    def _save_stats(self) -> None:
+        """Persist learning stats atomically; failures never raise."""
+        if self._stats_path is None:
+            return
+        try:
+            tmp = self._stats_path.with_name(self._stats_path.name + ".tmp")
+            tmp.write_text(
+                json.dumps(self.as_learning(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            tmp.replace(self._stats_path)
+        except OSError:
+            logger.exception("learning stats persistence failed")
 
     def propose(self, title: str, action: dict[str, Any], summary: str = "") -> str:
         """Add a proposal; auto-apply if whitelisted, else queue for yes/no.

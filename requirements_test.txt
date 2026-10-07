@@ -1,2 +1,6 @@
 pytest-homeassistant-custom-component
 pytest-asyncio
+# The conversation component (Agent Assist) pins these in HA 2026.2;
+# needed by tests/test_conversation.py.
+hassil==3.5.0
+home-assistant-intents==2026.1.28

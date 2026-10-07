@@ -18,6 +18,7 @@ PLATFORMS: list[Platform] = [
     Platform.SELECT,
     Platform.BUTTON,
     Platform.TEXT,
+    Platform.CONVERSATION,
 ]
 
 

@@ -94,6 +94,23 @@ class PilotApiClient:
             "POST", f"{API_PREFIX}/vitrine/update", json={"states": states}
         )
 
+    async def async_ask(self, message: str) -> dict[str, Any]:
+        """One Assist turn: {"say", "actions": [{mode: direct|queue|refuse, …}]}."""
+        return await self._request(
+            "POST", f"{API_PREFIX}/chat", json={"message": message}
+        )
+
+    async def async_enqueue(
+        self, title: str, action: dict[str, Any], summary: str = ""
+    ) -> str:
+        """Enqueue a trust proposal; returns the new item id."""
+        data = await self._request(
+            "POST",
+            f"{API_PREFIX}/queue",
+            json={"title": title, "summary": summary, "action": action},
+        )
+        return str(data.get("id", ""))
+
     async def _request(
         self, method: str, path: str, json: dict[str, Any] | None = None
     ) -> dict[str, Any]:

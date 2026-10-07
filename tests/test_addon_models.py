@@ -254,12 +254,8 @@ async def test_models_discover_lists_and_dedupes(addon, provider) -> None:
     _state, port = addon
     async with aiohttp.ClientSession() as session:
         async with session.ws_connect(f"http://127.0.0.1:{port}/ws") as ws:
-            reply = await _discover(
-                ws, {"base_url": provider.url, "api_key": "k"}
-            )
-            assert reply["payload"] == {
-                "models": ["deepseek-flash", "deepseek-pro"]
-            }
+            reply = await _discover(ws, {"base_url": provider.url, "api_key": "k"})
+            assert reply["payload"] == {"models": ["deepseek-flash", "deepseek-pro"]}
     auth = provider.requests[0][1].get("Authorization")
     assert auth == "Bearer k"
 
@@ -307,9 +303,7 @@ async def test_models_discover_error_paths(addon, provider) -> None:
             # Broken payload shape.
             provider.fail(200)
             provider.broken()
-            reply = await _discover(
-                ws, {"base_url": provider.url, "api_key": "k"}
-            )
+            reply = await _discover(ws, {"base_url": provider.url, "api_key": "k"})
             assert reply["type"] == "error"
 
 

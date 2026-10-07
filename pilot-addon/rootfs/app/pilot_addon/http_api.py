@@ -10,7 +10,10 @@ Endpoints (see custom_components/pilot/api.py):
     POST /api/focus        {focus}
     POST /api/reset        {target: learning | all}
     GET  /api/queue
+    POST /api/queue         {title, summary?, action} — enqueue a proposal
     POST /api/queue/confirm {id, decision}
+    POST /api/chat          {message} — one Assist turn (LLM, budget-guarded):
+                            {"say", "actions": [{mode: direct|queue|refuse, …}]}
     GET  /api/vitrine
     POST /api/vitrine/update
     WS   /ws               workshop SPA protocol (see ws_api.py)
@@ -131,12 +134,37 @@ def create_app(
             {"items": [item.as_dict() for item in state.queue.items]}
         )
 
+    async def queue_propose(request: web.Request) -> web.Response:
+        """Enqueue a trust proposal (chat remote control, integrations)."""
+        body = await request.json()
+        title = str(body.get("title") or "").strip()
+        action = body.get("action")
+        if not title or not isinstance(action, dict):
+            return web.json_response({"error": "title and action required"}, status=400)
+        item_id = state.queue.propose(
+            title=title,
+            summary=str(body.get("summary") or ""),
+            action=action,
+        )
+        return web.json_response({"ok": True, "id": item_id})
+
     async def queue_confirm(request: web.Request) -> web.Response:
         body = await request.json()
         ok = state.queue.confirm(str(body["id"]), str(body["decision"]))
         if not ok:
             return web.json_response({"error": "not found"}, status=404)
         return web.json_response({"ok": True})
+
+    async def chat(request: web.Request) -> web.Response:
+        """One conversation turn (the Assist remote control)."""
+        from .chat import chat_ask  # lazy: keeps startup import graph small
+
+        body = await request.json()
+        message = str(body.get("message") or "").strip()
+        if not message:
+            return web.json_response({"error": "message required"}, status=400)
+        result = await chat_ask(state, message)
+        return web.json_response(result)
 
     async def vitrine(request: web.Request) -> web.Response:
         return web.json_response(state.vitrine.as_dict())
@@ -159,7 +187,9 @@ def create_app(
     app.router.add_post("/api/focus", focus)
     app.router.add_post("/api/reset", reset)
     app.router.add_get("/api/queue", queue_get)
+    app.router.add_post("/api/queue", queue_propose)
     app.router.add_post("/api/queue/confirm", queue_confirm)
+    app.router.add_post("/api/chat", chat)
     app.router.add_get("/api/vitrine", vitrine)
     app.router.add_post("/api/vitrine/update", vitrine_update)
     # Catch-all last: the SPA route matches every GET, so the contract

@@ -179,7 +179,7 @@ def create_app(
         states = body.get("states")
         if not isinstance(states, dict):
             return web.json_response({"error": "states required"}, status=400)
-        state.vitrine.update(states)
+        state.push_vitrine(states)
         return web.json_response({"ok": True, "entities": len(states)})
 
     app.router.add_get("/api/validate", validate)

@@ -154,6 +154,22 @@ async def checker_loop(
         await asyncio.sleep(interval_s)
 
 
+async def norm_loop(state: RuntimeState, interval_s: float = 1800) -> None:
+    """Habit learning: norm candidates -> trust proposals; never raises.
+
+    Runs every 30 minutes but the guards (home mode, decline history,
+    one-proposal-a-day cap) keep the owner unsolicited most of the time.
+    """
+    from .norms import propose_norms
+
+    while True:
+        try:
+            propose_norms(state)
+        except Exception:
+            logger.exception("norm detection failed")  # soft degradation
+        await asyncio.sleep(interval_s)
+
+
 async def supervisor_scheduler(
     state: RuntimeState,
     get_broadcast: Callable[[], Any] | None = None,
@@ -198,7 +214,8 @@ async def main() -> None:
     # The vitrine is fed by pushes from the HA integration (vitrine_push) —
     # the integration IS HA, so no second WebSocket reader lives here.
     tasks: list[asyncio.Task[None]] = [
-        asyncio.create_task(checker_loop(state, checker))
+        asyncio.create_task(checker_loop(state, checker)),
+        asyncio.create_task(norm_loop(state)),
     ]
 
     app = create_app(state)

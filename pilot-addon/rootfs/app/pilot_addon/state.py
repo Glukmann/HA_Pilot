@@ -15,6 +15,7 @@ from typing import Any
 
 from .chatsessions import ChatSessions
 from .coregate import pending_update
+from .eventlog import EventLog
 from .modelstore import resolve_section
 
 PERSONA_SLIDERS = (
@@ -144,7 +145,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.15.1"
+        self.runtime_version = "0.16.0"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -161,6 +162,22 @@ class RuntimeState:
         self.vitrine = VitrineState()
         self.flags: list[str] = []
         self.sessions = ChatSessions(Path(data_dir))
+        self.events = EventLog(Path(data_dir) / "events.jsonl")
+
+    def push_vitrine(self, states: dict[str, dict[str, Any]]) -> None:
+        """Merge a pushed batch into the vitrine and journal transitions."""
+        previous = {
+            eid: sample.get("state")
+            for eid, sample in self.vitrine.states.items()
+            if isinstance(sample, dict)
+        }
+        self.vitrine.update(states)
+        for eid, sample in states.items():
+            if not isinstance(sample, dict):
+                continue
+            new_state = sample.get("state")
+            if previous.get(eid) != new_state:
+                self.events.record(eid, str(new_state))
 
     # -- cost accounting (persisted: the budget guard must survive restarts) --
     def _load_cost(self, path: Path) -> None:

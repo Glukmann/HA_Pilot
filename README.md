@@ -62,6 +62,12 @@ Pilot ставится двумя частями из одного репози�
    интеграций появится **Pilot Eyes**.
 2. Устройство «Pilot Eyes» появится в списке устройств — со статусом агента,
    очередью подтверждений, шкалами персоны и ссылкой на панель.
+3. Откройте пункт **«Пилот»** в боковом меню — мастерская. При первом входе
+   запустится **онбординг-визард** (4 шага): знакомство, настройка
+   супервизора (провайдер, модель, ключ — с пресетами популярных
+   платформ), пресет персоны, итог. Дальше моделями можно управлять в
+   разделе **«Модели»**: несколько профилей, активная — галочкой, список
+   моделей подгружается у провайдера кнопкой.
 
 Если обнаружение не сработало (например, аддон запущен вне Supervisor):
 **Добавить интеграцию** → **Pilot Eyes** → ввести вручную:
@@ -77,6 +83,10 @@ Pilot ставится двумя частями из одного репози�
   перезапуск HA.
 - **Интеграция (вручную):** повторить вариант Б шага 1 поверх существующей
   папки → перезапуск HA.
+
+Обновления не теряют настройки: очередь подтверждений и конфигурация
+переживают перезапуск, схема конфига мигрирует сама, а данные ядра
+снапшотятся перед миграциями (см. `docs/2026-10-07-openclaw-update-policy.md`).
 
 ### Если что-то пошло не так
 
@@ -121,19 +131,31 @@ Pilot ставится двумя частями из одного репози�
 
 ## What it does
 
+Реализовано (подробности — CHANGELOG аддона):
+
 - **Supervisor of goals**: deterministic checkers notice deviations (dead
-  sensors, climate without effect, energy spikes, stuck lights or gates); the
-  agent runs once a day over the flagged facts and adjusts setpoints within an
-  explicit whitelist.
-- **Pattern log**: repeated manual actions become candidates for automations —
-  rules grow out of *accepted proposals*, never out of guessed patterns.
-- **Butler**: contextual suggestions ("Good morning — coffee in two minutes,
-  as usual?") with a persona the owner tunes (butler ↔ quiet observer,
-  polite ↔ decides alone, dry ↔ chatty, conservative ↔ experimenter).
-- **Derived states**: the agent reasons in human terms ("awake", "sleeps",
-  "away-but-back-soon", "guests") instead of raw sensors.
-- **Local memory**: raw logs, daily digests, vector search over digests,
-  structured facts about the owner, self-maintained skills — all on-device.
+  sensors, climate without effect, energy spikes, stuck lights or gates);
+  the agent runs once a day over the flagged facts and adjusts setpoints
+  within an explicit whitelist; everything else waits in the trust queue.
+- **Trust loop**: yes/no approval queue (persistent across restarts),
+  append-only audit log, hard daily budget in ₽, one-click rollback of
+  applied setpoints. Confirmed actions are really executed in HA.
+- **Chat remote control**: Pilot is a full Assist agent — ask about the
+  home or tell it what to do. Reversible actions (lights, media, setpoints)
+  execute immediately; irreversible ones land in the trust queue; cameras
+  and alarms are never touched from chat.
+- **Model profiles**: several LLM providers with an active one-switch
+  selection; onboarding wizard with presets for popular platforms; the
+  provider's model list is fetched in-place.
+- **Persona**: presets («butler» / «quiet observer» / «economy») and
+  sliders, editable in the workshop; the queue learns from the owner's
+  accept/reject statistics.
+
+Концепция (roadmap, ещё не в продукте): pattern log — repeated manual
+actions become candidates for automations; derived states («awake»,
+«sleeps», «guests»); butler-style contextual suggestions; local memory
+уровней 1–5; детерминированный разбор простых интентов в чате без
+LLM-запроса.
 
 ## Скриншоты мастерской (mock-данные)
 
@@ -155,14 +177,19 @@ Music Assistant pattern:
 
 - **`custom_components/pilot`** — a native Home Assistant custom integration:
   one "Pilot Eyes" device with entities (status, daily cost, suggestion queue,
-  persona sliders, presets, reset buttons), a conversation agent in the Assist
-  pipeline with deterministic handling of simple intents, services for
-  automations, repairs/diagnostics/system health. The single user-facing UI is
-  the add-on's "Пилот" sidebar panel (the workshop SPA behind ingress).
-- **A Home Assistant add-on** — the OpenClaw runtime: deterministic layers
-  (detectors, derived states, goal metrics, pattern log, trust loop, state
-  mirror), daily LLM runs, local memory, and a full-featured admin UI
-  ("workshop") served via ingress.
+  persona sliders, presets, reset buttons), a **conversation agent in the
+  Assist pipeline** (the chat remote control: safe actions execute via HA
+  services, risky ones go to the trust queue), mobile actionable
+  notifications, repairs/diagnostics/system health. The single user-facing
+  admin UI is the add-on's "Пилот" sidebar panel (the workshop SPA behind
+  ingress).
+- **A Home Assistant add-on** — the agent runtime behind the same UI:
+  deterministic checker layer, the daily LLM supervisor run, the trust loop
+  (queue, audit, budget guard, executor), the chat endpoint (LLM with the
+  home vitrine as context and deterministic action classification), and the
+  workshop itself. The OpenClaw core is pinned into the hermetic image as a
+  build argument and updates together with the add-on, under a snapshot
+  migration gate (`docs/2026-10-07-openclaw-update-policy.md`).
 
 MVP scope: local add-on mode only. A "remote instance" connection mode is
 architecturally reserved for power users who run the runtime on their own
@@ -172,11 +199,12 @@ machine.
 
 MVP (integration + add-on) is implemented and runs in the owner's home:
 install via the add-on store, auto-discovery of the integration, device
-entities, the «Пилот» workshop panel, state-mirror vitrine pushed by the
-integration. See
-[GOALS.md](GOALS.md) for product goals and [LICENSES.md](LICENSES.md) for
-licensing (PolyForm Noncommercial 1.0.0 — personal use free, commercial by
-agreement, see [COMMERCIAL.md](COMMERCIAL.md)).
+entities, the «Пилот» workshop panel with onboarding, the trust queue with
+real execution, model profiles, and the Assist chat remote control. Data
+survives updates: persistent queue, config schema migrations, and a snapshot
+gate for core migrations. See [GOALS.md](GOALS.md) for product goals and
+[LICENSES.md](LICENSES.md) for licensing (PolyForm Noncommercial 1.0.0 —
+personal use free, commercial by agreement, see [COMMERCIAL.md](COMMERCIAL.md)).
 
 ## Author
 

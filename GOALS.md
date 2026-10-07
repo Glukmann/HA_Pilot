@@ -39,10 +39,11 @@ from the owner instead of the owner programming the home.
 
 ## Roadmap in one line
 
-MVP in the owner's own home (goal supervisor + pattern log + first derived
-states) → a season of real operation → packaging as an HA add-on (+ HACS
-panel) → publication. Rules from accepted proposals come after trust has
-accumulated, not before.
+MVP shipped in the owner's home (16.09: goal supervisor, trust loop, workshop)
+→ season of real operation (сейчас; 0.9–0.12: исполнитель очереди, чат-пульт
+Assist, профили моделей, защита данных при обновлениях) → Фаза 6 (pattern log,
+derived states, обучение персоны) → publication. Rules from accepted proposals
+come after trust has accumulated, not before.
 
 ## Success criteria
 

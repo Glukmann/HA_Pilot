@@ -96,6 +96,7 @@ async def test_direct_action_executed_in_ha(hass, aioclient_mock):
     result = await agent.async_process(_input("выключи свет в холле"))
     speech = result.response.speech["plain"]["speech"]
     assert "Готово." in speech
+    assert "Выполнено: pilot_test.demo" in speech  # deterministic accounting
     assert "мастерской" in speech  # queued action disclosed
 
     assert calls == [

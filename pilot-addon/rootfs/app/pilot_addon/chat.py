@@ -99,6 +99,65 @@ def _history_block(state: RuntimeState, conversation_id: str) -> str:
     return "\n".join(lines)
 
 
+_OWNER_MEMORY_REJECTS = 8
+_OWNER_MEMORY_AUDIT_TAIL = 300
+
+
+def _owner_memory_block(state: RuntimeState) -> str:
+    """Learning stats + recent rejections — the owner's decision history.
+
+    Lets the chat reason about habits ("в прошлый раз ты отклонил…")
+    instead of asking the same thing twice. Rejections are read from the
+    append-only audit tail; titles only, no secrets.
+    """
+    learning = state.queue.as_learning()
+    total = learning["total"]
+    lines = [
+        "История решений хозяина:",
+        (
+            f"- Всего: предложено {total['proposed']}, принято {total['accepted']}, "
+            f"отклонено {total['rejected']}, применено молча {total['applied_silent']}."
+        ),
+    ]
+    kinds = sorted(
+        learning["by_kind"].items(),
+        key=lambda kv: kv[1]["accepted"] + kv[1]["rejected"],
+        reverse=True,
+    )[:5]
+    if kinds:
+        detail = "; ".join(
+            f"{kind}: принято {v['accepted']}/отклонено {v['rejected']}"
+            for kind, v in kinds
+        )
+        lines.append(f"- По видам действий: {detail}.")
+    rejections = _recent_rejection_titles(state)
+    if rejections:
+        lines.append("- Недавние отказы:")
+        lines.extend(f"  - {title}" for title in rejections)
+    return "\n".join(lines)
+
+
+def _recent_rejection_titles(state: RuntimeState) -> list[str]:
+    """The last rejected proposal titles from the audit tail."""
+    path = state.queue._audit.path
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    titles: list[str] = []
+    for line in text.splitlines()[-_OWNER_MEMORY_AUDIT_TAIL:]:
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if record.get("event") != "queue.rejected":
+            continue
+        detail = record.get("detail")
+        if isinstance(detail, dict) and detail.get("title"):
+            titles.append(str(detail["title"]))
+    return titles[-_OWNER_MEMORY_REJECTS:]
+
+
 async def chat_ask(
     state: RuntimeState,
     message: str,
@@ -144,6 +203,7 @@ async def chat_ask(
             header,
             *lines,
             "",
+            _owner_memory_block(state),
             _history_block(state, conversation_id),
             f"Сообщение хозяина: {message}",
         ]

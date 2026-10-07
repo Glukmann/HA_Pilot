@@ -80,6 +80,7 @@ class PilotConversationEntity(ConversationEntity):
         actions = [a for a in result.get("actions") or [] if isinstance(a, dict)]
 
         executed = 0
+        executed_names: list[str] = []
         queued = 0
         refused = 0
         failed = 0
@@ -94,10 +95,15 @@ class PilotConversationEntity(ConversationEntity):
                 continue
             if await self._execute(action):
                 executed += 1
+                executed_names.append(str(action.get("entity_id") or "действие"))
             else:
                 failed += 1
 
+        # Deterministic accounting: what actually happened, regardless of
+        # what the LLM claimed in "say" — trust is built on facts.
         suffix: list[str] = []
+        if executed:
+            suffix.append(f"Выполнено: {', '.join(executed_names)}.")
         if queued:
             suffix.append("Ждёт вашего подтверждения в мастерской (Очередь).")
         if refused:

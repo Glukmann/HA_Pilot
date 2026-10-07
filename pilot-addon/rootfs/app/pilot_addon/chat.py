@@ -22,6 +22,7 @@ from typing import Any
 
 import aiohttp
 
+from .director import direct_answer
 from .safety import classify
 from .state import RuntimeState
 from .supervisor import _accrue_cost, _ask_llm, load_supervisor_config
@@ -195,6 +196,17 @@ async def chat_ask(
             ),
             "error": "budget",
         }
+
+    # Deterministic fast path: simple asks never reach the LLM (0 tokens).
+    direct = direct_answer(state, message)
+    if direct is not None:
+        audit.record(
+            "chat.fallback",
+            {"actions": len(direct["actions"]), "say": direct["say"]},
+        )
+        state.sessions.append(conversation_id, "user", message)
+        state.sessions.append(conversation_id, "assistant", direct["say"])
+        return direct
 
     all_lines = state.vitrine.lines
     lines = all_lines[-MAX_VITRINE_LINES:]

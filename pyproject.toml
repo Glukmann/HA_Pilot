@@ -31,11 +31,13 @@ known-first-party = ["custom_components"]
 "pilot-addon/rootfs/app/pilot_addon/modelstore.py" = ["RUF001"]
 "pilot-addon/rootfs/app/pilot_addon/ws_api.py" = ["RUF001"]
 "pilot-addon/rootfs/app/pilot_addon/chat.py" = ["RUF001"]
+"pilot-addon/rootfs/app/pilot_addon/director.py" = ["RUF001"]
 "tests/test_supervisor.py" = ["RUF001"]
 "tests/test_prompts_skills.py" = ["RUF001"]
 "tests/test_conversation.py" = ["RUF001"]
 "tests/test_addon_checker.py" = ["RUF001"]
 "tests/test_chat_sessions.py" = ["RUF001"]
+"tests/test_director.py" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.13"

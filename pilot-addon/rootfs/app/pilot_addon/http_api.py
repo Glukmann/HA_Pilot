@@ -122,7 +122,7 @@ def create_app(
             state.current_focus = ""
             state.cost_today = 0.0
             state.flags.clear()
-            state.queue.items.clear()
+            state.queue.clear()
             state.queue.reset_stats()
         else:
             return web.json_response({"error": "unknown target"}, status=400)

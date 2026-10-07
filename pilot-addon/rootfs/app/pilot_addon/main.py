@@ -74,6 +74,7 @@ def build_state(
             rollback=rollback,
             apply_action=_apply_action,
             whitelisted=_whitelisted,
+            path=data_dir / "queue.json",
         )
     )
     return state
@@ -182,6 +183,15 @@ async def main() -> None:
         seed_defaults(DATA_DIR)
     except OSError:
         logger.exception("failed to seed prompt/skill defaults")
+    try:
+        if state.migrate_config_file():
+            logger.info("config schema migrated to disk")
+    except OSError:
+        logger.exception("config schema migration failed")
+    from .coregate import begin_update, complete_update
+
+    core_version = os.environ.get("OPENCLAW_VERSION", "")
+    gate = begin_update(DATA_DIR, core_version)
     checker = Checker()
     state.attach_checker(checker)
 
@@ -210,6 +220,11 @@ async def main() -> None:
 
     async with aiohttp.ClientSession() as session:
         await publish_discovery(session, port=int(os.environ.get("PORT", "8899")))
+
+    # The add-on itself is up — that is the health signal available until
+    # the core ships in the image; its own ping wires into this same gate.
+    if gate.get("status") == "snapshotted":
+        complete_update(DATA_DIR, core_version, healthy=True)
 
     await asyncio.gather(*tasks)
 

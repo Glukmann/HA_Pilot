@@ -13,6 +13,7 @@ from pathlib import Path
 import time
 from typing import Any
 
+from .coregate import pending_update
 from .modelstore import resolve_section
 
 PERSONA_SLIDERS = (
@@ -43,6 +44,31 @@ PERSONA_PRESETS: dict[str, dict[str, int]] = {
 }
 PILOT_MODES = ("normal", "vacation", "guests", "sick")
 VITRINE_MAX_AGE_S = 60
+
+# Config schema versioning (docs/2026-10-07-openclaw-update-policy.md):
+# v1 — original flat file (no schema_version field);
+# v2 — model profiles in supervisor.models/active_id (0.10.0); v1 files stay
+#      valid via the legacy fallback, we just stamp the version.
+CONFIG_SCHEMA_VERSION = 2
+
+
+def migrate_config(raw: dict[str, Any]) -> dict[str, Any]:
+    """Bring a parsed config dict up to the current schema, in memory.
+
+    Each step is small and deterministic; a file newer than this code is
+    returned untouched (forward compatibility).
+    """
+    version = raw.get("schema_version")
+    if isinstance(version, int) and version > CONFIG_SCHEMA_VERSION:
+        return raw
+    version = version if isinstance(version, int) else 1
+    if version < 2:
+        # v1 -> v2: model profiles introduced. Legacy top-level supervisor
+        # fields remain valid via modelstore's fallback — nothing to move,
+        # only the version stamp changes.
+        version = 2
+    raw["schema_version"] = CONFIG_SCHEMA_VERSION
+    return raw
 
 
 def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
@@ -115,7 +141,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.11.0"
+        self.runtime_version = "0.12.0"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -151,12 +177,37 @@ class RuntimeState:
         return Path(self.data_dir) / "pilot.json"
 
     def read_config(self) -> dict[str, Any] | None:
-        """Parsed pilot.json; None when missing, unreadable or not an object."""
+        """Parsed pilot.json, schema migrations applied; None when unusable."""
         try:
             raw = json.loads(self.config_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        return raw if isinstance(raw, dict) else None
+        if not isinstance(raw, dict):
+            return None
+        return migrate_config(raw)
+
+    def migrate_config_file(self) -> bool:
+        """Apply config migrations to disk; True when the file changed.
+
+        Called once at startup: older schemas are stamped up-front so every
+        later write_config_section keeps the migrated shape.
+        """
+        try:
+            original = json.loads(self.config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        if not isinstance(original, dict):
+            return False
+        migrated = migrate_config(dict(original))
+        if migrated == original:
+            return False
+        tmp = self.config_path.with_name("pilot.json.tmp")
+        tmp.write_text(
+            json.dumps(migrated, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        tmp.replace(self.config_path)
+        return True
 
     def write_config_section(self, section: str, values: dict[str, Any]) -> None:
         """Deep-merge values into pilot.json[section]; write atomically.
@@ -174,7 +225,7 @@ class RuntimeState:
             backup = self.config_path.with_name(f"pilot.json.bad-{stamp}")
             self.config_path.replace(backup)
             current = {}
-        merged = dict(current or {})
+        merged = migrate_config(dict(current or {}))
         existing = merged.get(section)
         base = dict(existing) if isinstance(existing, dict) else {}
         merged[section] = _deep_merge(base, values)
@@ -271,6 +322,7 @@ class RuntimeState:
             "layers": self.layers_status(),
             "onboarded": self.is_onboarded(),
             "learning": self.queue.as_learning() if self.queue is not None else {},
+            "core_update": pending_update(Path(self.data_dir)),
             "supervisor": {
                 **self.supervisor_status,
                 "cost_today": round(self.cost_today, 4),

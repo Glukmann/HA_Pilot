@@ -136,6 +136,43 @@ def _save_meta(state: Any, meta: dict[str, Any]) -> None:
         logger.exception("norm meta persistence failed")
 
 
+# -- decision memory: what the owner already decided ------------------------------
+
+
+def _signature(action: dict[str, Any]) -> str:
+    """The owner's decision key: one concrete habit or deviation."""
+    entity_id = str(action.get("entity_id") or "")
+    kind = str(action.get("kind") or action.get("service") or "")
+    return f"{entity_id}:{kind}"
+
+
+def record_decision(state: Any, action: dict[str, Any], decision: str) -> None:
+    """Persist an accepted/declined norm or deviation — never re-ask it.
+
+    This is the accumulated knowledge about the owner: «выключение света
+    в коридоре автоматизировать не нужно» должно помниться дольще, чем
+    живёт статистика очереди.
+    """
+    if action.get("type") not in ("pattern", "deviation"):
+        return
+    meta = _load_meta(state)
+    bucket = "accepted" if decision == "yes" else "declined"
+    decided = meta.setdefault("decided", {"accepted": [], "declined": []})
+    signature = _signature(action)
+    if signature in decided["accepted"] or signature in decided["declined"]:
+        return
+    decided[bucket] = (decided[bucket] + [signature])[-200:]
+    _save_meta(state, meta)
+
+
+def _decided(state: Any, bucket: str) -> set[str]:
+    decided = _load_meta(state).get("decided")
+    if not isinstance(decided, dict):
+        return set()
+    values = decided.get(bucket)
+    return set(values) if isinstance(values, list) else set()
+
+
 def _declined_norm_titles(state: Any) -> set[str]:
     """Titles of our norm proposals that the owner rejected (audit scan)."""
     path = state.queue._audit.path
@@ -177,8 +214,11 @@ def propose_norms(
         return []
 
     proposed: list[str] = []
+    decided = _decided(state, "accepted") | _decided(state, "declined")
     for candidate in detect_norms(state, now):
         eid = candidate["entity_id"]
+        if f"{eid}:{candidate['kind']}" in decided:
+            continue  # хозяин уже решал эту автоматизацию — не предлагать повторно
         sample = state.vitrine.states.get(eid)
         attrs = sample.get("attrs") if isinstance(sample, dict) else None
         attrs = attrs if isinstance(attrs, dict) else {}
@@ -257,12 +297,15 @@ def propose_deviations(
     if meta.get("last_deviation_day") == today:
         return []
 
+    decided = _decided(state, "accepted") | _decided(state, "declined")
     for flag in state.flags:
         prefix, _, eid = flag.partition(":")
         rule = _DEVIATION_RULES.get(prefix)
         if rule is None or not eid:
             continue
         key, service, _ = rule
+        if f"{eid}:{service}" in decided:
+            continue  # хозяин уже отвечал на это отклонение — молчим
         action = {
             "type": "deviation",
             "domain": eid.split(".", 1)[0],

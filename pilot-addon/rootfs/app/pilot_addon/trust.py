@@ -118,6 +118,9 @@ class TrustQueue:
         self._path = path
         self._stats_path = path.with_name("learning.json") if path is not None else None
         self.last_change_ts: float | None = None
+        # Optional observer for confirmed/rejected items (e.g. the norm
+        # layer persisting the owner's decisions); never raised into.
+        self.on_decision: Callable[[dict[str, Any], str], None] | None = None
         # Learning stats: the raw material for persona adaptation (Phase 6).
         # Counts every decision path; by_kind breaks accept/reject down per
         # action kind (setpoint / proposal / domain of the target entity).
@@ -266,6 +269,11 @@ class TrustQueue:
             self.items.remove(item)
             self.last_change_ts = time.time()
             self._save()
+            if self.on_decision is not None:
+                try:
+                    self.on_decision(item.action, decision)
+                except Exception:  # observers must never break a decision
+                    logger.exception("on_decision observer failed")
             if decision == "yes":
                 self._count("accepted", item.action)
                 self._apply(item.action, confirmed_by="owner")

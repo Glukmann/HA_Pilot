@@ -77,6 +77,13 @@ def build_state(
             path=data_dir / "queue.json",
         )
     )
+
+    def _on_decision(action: dict[str, object], decision: str) -> None:
+        from .norms import record_decision
+
+        record_decision(state, action, decision)
+
+    state.queue.on_decision = _on_decision
     return state
 
 

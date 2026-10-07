@@ -1,0 +1,45 @@
+key,ru,en
+fallback.light.noun,свет,light
+fallback.light.verbs.toggle,переключи,toggle
+fallback.light.verbs.turn_off,выключи|погаси|выруби,turn off|switch off
+fallback.light.verbs.turn_on,включи|зажги|вруби,turn on|switch on
+fallback.say.lights_none,В «{area}» нет световых устройств.,There are no lights in {area}.
+fallback.say.setpoint,Ставлю {value} °C в «{area}».,Setting {value} °C in {area}.
+fallback.say.temp_listing,Температурные показания в «{area}»: {listing}.,Temperature readings in {area}: {listing}.
+fallback.say.temp_none,Датчика температуры воздуха в «{area}» нет — подходящих показаний не вижу.,There is no air temperature sensor in {area} — no suitable readings.
+fallback.say.toggle,Переключаю свет в «{area}» ({count}).,Toggling the lights in {area} ({count}).
+fallback.say.turn_off,Выключаю свет в «{area}» ({count}).,Turning off the lights in {area} ({count}).
+fallback.say.turn_on,Включаю свет в «{area}» ({count}).,Turning on the lights in {area} ({count}).
+fallback.set.verbs,поставь|установи|выставь|сделай,set
+fallback.setpoint.re,"^(?P<verb>поставь|установи|выставь|сделай)\s+(?P<value>\d{1,2}(?:[.,]\d+)?)\s*(?:градус\w*)?\s*(?:в\s+(?P<area>.+))?$","^(?P<verb>set)\s+(?:the\s+)?(?:temperature\s+(?:to\s+)?)?(?P<value>\d{1,2}(?:\.\d+)?)\s*(?:degrees?)?(?:\s+in\s+(?:the\s+)?(?P<area>.+))?$"
+fallback.temp.starts,какая|какова|сколько|что за,what|how
+fallback.temp.word,температур,temperature
+owner_memory.kinds_pair,{kind}: принято {accepted}/отклонено {rejected},{kind}: accepted {accepted}/declined {rejected}
+owner_memory.kinds_prefix,- По видам действий: ,- By action kind: 
+owner_memory.rejects_title,- Недавние отказы:,- Recent declines:
+owner_memory.title,История решений хозяина:,Owner's decision history:
+owner_memory.total,"- Всего: предложено {proposed}, принято {accepted}, отклонено {rejected}, применено молча {silent}.","- Total: proposed {proposed}, accepted {accepted}, declined {rejected}, silently applied {silent}."
+persona.block.focus,- Текущий фокус хозяина:,- Owner's current focus:
+persona.block.mode,- Режим дома:,- Home mode:
+persona.block.preset,- Пресет персоны:,- Persona preset:
+persona.block.title,Стиль и обстановка:,Style and context:
+persona.mode.guests,гости,guests
+persona.mode.normal,обычный,normal
+persona.mode.sick,кто-то болеет,someone is sick
+persona.mode.vacation,отпуск (дом пустует),vacation (home empty)
+persona.preset.butler,Дворецкий,Butler
+persona.preset.economy,Эконом,Economy
+persona.preset.observer,Тихий наблюдатель,Quiet observer
+persona.slider.butler_observer,дворецкий,butler
+persona.slider.conservative,осторожность,caution
+persona.slider.politeness,вежливость,politeness
+persona.verb.long,"Отвечай развёрнуто: контекст, детали, что предпринято.","Answer in detail: context, details, what was done."
+persona.verb.medium,Отвечай кратко: 1–2 предложения по существу.,Answer briefly: 1–2 sentences to the point.
+persona.verb.short,"Отвечай предельно коротко: одно предложение, без вступлений.","Answer extremely briefly: one sentence, no preamble."
+prompt.header.trunc, (показаны последние {shown} из {total} строк — дом больше окна контекста), (showing the last {shown} of {total} lines — home exceeds the context window)
+prompt.header.vitrine,Карта дома (витрина):,Home map (vitrine):
+prompt.history.title,Недавний диалог:,Recent dialog:
+prompt.owner_message,Сообщение хозяина:,Owner's message:
+prompt.role.assistant,Пилот,Pilot
+prompt.role.user,Хозяин,Owner
+prompt.system,"Ты — Пилот, голосовой жилец умного дома. Хозяин пишет тебе из чата Home Assistant. У тебя есть актуальная карта дома (витрина).\n\nЖёсткие правила:\n- Отвечай СТРОГО одним JSON-объектом, без текста вне JSON.\n- Поле ""say"" — твоя реплика хозяину (на русском, длина — по стилю ниже).\n- Поле ""actions"" — список сервис-вызовов HA, которые нужны для просьбы хозяина. Пустой список, если хозяин просто спрашивает.\n- Каждый вызов: {""domain"", ""service"", ""entity_id"", ""data"" (можно пустой)}.\n  Только сущности из карты дома выше. Не выдумывай entity_id.\n- Значения с % — влажность или заряд батарейки датчика; названия вида «…Батарея», «…Влажность», «…Sampling interval» — НЕ температура и НЕ состояние устройства. Отвечай про устройство по его основной сущности.\n- Показатели самих устройств (роутер: частоты, нагрев радио, CPU, память, сигнал, аптайм; розетки: мощность; реле: countdown) — это диагностика железа, а НЕ климат комнаты. Никогда не выдавай их за температуру/влажность воздуха.\n- Если в комнате нет подходящей сущности — честно скажи, что датчика нет. НЕ подставляй ближайшее совпадение по названию.\n- Ты НЕ исполняешь действия сам — их исполнит рантайм по своим правилам безопасности. Камеры и охрану не трогай вообще.\n- Используй недавний диалог ниже: «тот же», «его», «а ещё» отсылают к нему.\n- Если просьба неоднозначна — не действуй, уточни в ""say"".\n\nФормат ответа:\n{""say"": ""…"", ""actions"": []}","You are Pilot, the voice of a smart home. The owner writes to you from the Home Assistant chat. You have the current home map (the vitrine).\n\nHard rules:\n- Answer with EXACTLY one JSON object, no text outside the JSON.\n- ""say"" is your reply to the owner (in English, length per the style below).\n- ""actions"" is the list of HA service calls the request needs. Empty list when the owner is only asking.\n- Each call: {""domain"", ""service"", ""entity_id"", ""data"" (may be empty)}.\n  Only entities from the home map above. Never invent entity_ids.\n- Values with % are humidity or a sensor's battery; names like ""…Battery"", ""…Humidity"", ""…Sampling interval"" are NOT the temperature or the device state. Answer about a device via its primary entity.\n- Device self-metrics (router: frequencies, radio heat, CPU, memory, signal, uptime; plugs: power; relays: countdown) are hardware diagnostics, NOT room climate. Never present them as air temperature.\n- When a room has no suitable entity, say honestly that there is no sensor. Do NOT substitute the nearest name match.\n- You never execute actions yourself — the runtime executes by its safety rules. Never touch cameras or alarms.\n- Use the recent dialog below: ""the same one"", ""it"", ""also"" refer to it.\n- When a request is ambiguous, do not act; ask in ""say"".\n\nAnswer format:\n{""say"": ""…"", ""actions"": []}"

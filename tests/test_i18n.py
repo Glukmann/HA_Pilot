@@ -112,3 +112,22 @@ def test_russian_still_default(tmp_path, socket_enabled, monkeypatch):
     result = direct_answer(state, "выключи свет в кабинете")
     assert result is not None
     assert "Выключаю" in result["say"]
+
+
+def test_locale_completeness():
+    """Every supported language fills every key (guards community PRs)."""
+    from pilot_addon import i18n
+
+    rows = i18n._rows()
+    for language in i18n.supported_languages():
+        missing = [
+            key
+            for key, cells in rows.items()
+            if not (cells.get(language) or "").strip()
+        ]
+        assert missing == [], f"{language} misses keys: {missing}"
+    # The fallback regexes must keep their named groups in every language.
+    for language in i18n.supported_languages():
+        pattern = i18n._text("fallback.setpoint.re", language)
+        for group in ("verb", "value", "area"):
+            assert f"?P<{group}>" in pattern, f"{language}: regex lost {group}"

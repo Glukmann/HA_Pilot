@@ -92,6 +92,44 @@ class TrustQueue:
             lambda action: action.get("type") in WHITELISTED_ACTIONS
         )
         self.last_change_ts: float | None = None
+        # Learning stats: the raw material for persona adaptation (Phase 6).
+        # Counts every decision path; by_kind breaks accept/reject down per
+        # action kind (setpoint / proposal / domain of the target entity).
+        self.stats: dict[str, int] = {
+            "proposed": 0,
+            "accepted": 0,
+            "rejected": 0,
+            "applied_silent": 0,
+        }
+        self.stats_by_kind: dict[str, dict[str, int]] = {}
+
+    def as_learning(self) -> dict[str, Any]:
+        """Learning stats snapshot for status/UI; copies, never references."""
+        return {
+            "total": dict(self.stats),
+            "by_kind": {key: dict(val) for key, val in self.stats_by_kind.items()},
+        }
+
+    def reset_stats(self) -> None:
+        """Clear learning stats (owner's Reset learning); queue is untouched."""
+        for key in self.stats:
+            self.stats[key] = 0
+        self.stats_by_kind.clear()
+
+    @staticmethod
+    def _kind_key(action: dict[str, Any]) -> str:
+        entity_id = str(action.get("entity_id") or "")
+        if "." in entity_id:
+            return entity_id.split(".", 1)[0]
+        return str(action.get("kind") or action.get("type") or "other")
+
+    def _count(self, counter: str, action: dict[str, Any]) -> None:
+        self.stats[counter] = self.stats.get(counter, 0) + 1
+        if counter in ("accepted", "rejected"):
+            bucket = self.stats_by_kind.setdefault(
+                self._kind_key(action), {"accepted": 0, "rejected": 0}
+            )
+            bucket[counter] += 1
 
     def propose(self, title: str, action: dict[str, Any], summary: str = "") -> str:
         """Add a proposal; auto-apply if whitelisted, else queue for yes/no.
@@ -103,6 +141,7 @@ class TrustQueue:
         item_id = uuid.uuid4().hex[:12]
         self.last_change_ts = time.time()
         if self._whitelisted(action):
+            self._count("applied_silent", action)
             self._apply(action, confirmed_by="whitelist")
             return item_id
         for item in self.items:
@@ -110,6 +149,7 @@ class TrustQueue:
                 return item.id
         item = QueueItem(id=item_id, title=title, summary=summary, action=action)
         self.items.append(item)
+        self._count("proposed", action)
         self._audit.record("queue.proposed", {"id": item_id, "title": title})
         return item_id
 
@@ -121,8 +161,10 @@ class TrustQueue:
             self.items.remove(item)
             self.last_change_ts = time.time()
             if decision == "yes":
+                self._count("accepted", item.action)
                 self._apply(item.action, confirmed_by="owner")
             else:
+                self._count("rejected", item.action)
                 self._audit.record(
                     "queue.rejected", {"id": item.id, "title": item.title}
                 )

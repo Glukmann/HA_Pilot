@@ -47,7 +47,7 @@ FROM ${BUILD_FROM}
 ARG OPENCLAW_VERSION
 ENV OPENCLAW_VERSION=${OPENCLAW_VERSION}
 
-RUN apk add --no-cache python3 py3-aiohttp py3-websockets
+RUN apk add --no-cache python3 py3-aiohttp
 
 WORKDIR /app
 COPY --from=ctx /ctx/addon-rootfs/app /app

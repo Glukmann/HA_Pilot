@@ -114,11 +114,13 @@ def create_app(
         target = str(body.get("target", ""))
         if target == "learning":
             state.current_focus = ""
+            state.queue.reset_stats()
         elif target == "all":
             state.current_focus = ""
             state.cost_today = 0.0
             state.flags.clear()
             state.queue.items.clear()
+            state.queue.reset_stats()
         else:
             return web.json_response({"error": "unknown target"}, status=400)
         state.queue._audit.record("reset", {"target": target})

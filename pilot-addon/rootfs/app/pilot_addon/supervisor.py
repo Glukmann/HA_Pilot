@@ -500,6 +500,8 @@ async def run_supervisor(
                             "kind": "setpoint",
                             "entity_id": entity_id,
                             "value": value,
+                            "previous": current,
+                            "rollback_key": f"setpoint:{entity_id}",
                         },
                     )
                     proposed.append(entity_id)
@@ -525,6 +527,8 @@ async def run_supervisor(
                             "kind": "setpoint",
                             "entity_id": entity_id,
                             "value": value,
+                            "previous": current,
+                            "rollback_key": f"setpoint:{entity_id}",
                         },
                     )
                     proposed.append(entity_id)

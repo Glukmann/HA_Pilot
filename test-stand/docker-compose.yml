@@ -27,8 +27,8 @@ services:
     ports:
       - "8899:8899"
     environment:
-      - HA_WS=ws://ha:8123/api/websocket
-      - HA_TOKEN=${HA_TOKEN:-}
       - PILOT_DATA=/data
     volumes:
       - ./addon-data:/data
+    # The vitrine is fed by pushes from the HA integration (mounted above),
+    # so no HA_WS/HA_TOKEN env is needed here.

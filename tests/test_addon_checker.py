@@ -90,3 +90,56 @@ def test_flags_for_collects_all():
     assert "sensor_dead:sensor.temp" in flags
     assert "gate_stuck:switch.gate" in flags
     assert "light_always_on:light.hall" in flags
+
+
+def _meter_sample(reading: float, at: float) -> EntitySample:
+    return EntitySample(
+        entity_id="sensor.home_energy",
+        state=str(reading),
+        attrs={"unit_of_measurement": "kWh"},
+        last_changed_ts=at,
+    )
+
+
+def test_energy_spike_via_flags_for_day_tracking():
+    """A meter pushed over several days flags a jump vs the 14-day median."""
+    checker = Checker()
+    day0 = time.mktime((2026, 9, 1, 8, 0, 0, 0, 0, -1))
+    reading = 1000.0
+    # Baseline: 3 quiet days (+1.0 kWh each).
+    for i in range(3):
+        day = day0 + i * 86400
+        checker.flags_for([_meter_sample(reading, day)], day)
+        reading += 1.0
+        checker.flags_for([_meter_sample(reading, day + 3600)], day + 3600)
+    # Day 4: consumption jumps 10x during the day.
+    spike_day = day0 + 3 * 86400
+    checker.flags_for([_meter_sample(reading, spike_day)], spike_day)
+    reading += 10.0
+    checker.flags_for([_meter_sample(reading, spike_day + 3600)], spike_day + 3600)
+    # The spike is only measurable on the next day's first sample.
+    flags = checker.flags_for(
+        [_meter_sample(reading, spike_day + 86400)], spike_day + 86400
+    )
+    assert "energy_spike:sensor.home_energy" in flags
+
+
+def test_energy_meter_reset_restarts_tracking():
+    checker = Checker()
+    day0 = time.mktime((2026, 9, 1, 8, 0, 0, 0, 0, -1))
+    checker.flags_for([_meter_sample(5000.0, day0)], day0)
+    # The meter got replaced: reading drops — no flag, fresh baseline.
+    flags = checker.flags_for([_meter_sample(3.0, day0 + 86400)], day0 + 86400)
+    assert "energy_spike:sensor.home_energy" not in flags
+    assert checker._meters["sensor.home_energy"]["day_start"] == 3.0
+
+
+def test_energy_non_kwh_units_ignored():
+    checker = Checker()
+    sample = EntitySample(
+        entity_id="sensor.power",
+        state="1500",
+        attrs={"unit_of_measurement": "W"},
+        last_changed_ts=NOW,
+    )
+    assert checker.flags_for([sample], NOW) == []

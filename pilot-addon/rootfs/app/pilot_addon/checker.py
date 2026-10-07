@@ -51,6 +51,8 @@ class Checker:
         self.thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
         self._state_history: dict[str, list[tuple[float, str]]] = {}
         self._energy_history: dict[str, list[tuple[float, float]]] = {}
+        # Per-meter day tracking: {"day": str, "day_start": float, "last": float}
+        self._meters: dict[str, dict[str, Any]] = {}
         self.last_run_ts: float | None = None
 
     def check_sensor_dead(self, sample: EntitySample, now: float | None = None) -> bool:
@@ -133,6 +135,54 @@ class Checker:
         median = values[len(values) // 2]
         return bool(daily_kwh > median * self.thresholds["energy_spike_factor"])
 
+    def _feed_energy(self, sample: EntitySample, now: float) -> bool:
+        """Track a kWh meter from vitrine pushes; True on a daily spike.
+
+        The vitrine only carries live values (no history API), so the daily
+        consumption is derived deterministically: per meter we remember the
+        reading at the start of the day and feed one sample per day (on the
+        first change after midnight, or on the first observation of a new
+        day). Wh units are converted to kWh. Meter resets (reading went
+        down) restart the tracking without a flag.
+        """
+        if sample.state in ("unavailable", "unknown", ""):
+            return False
+        unit = str(sample.attrs.get("unit_of_measurement", ""))
+        try:
+            raw = float(sample.state)
+        except (TypeError, ValueError):
+            return False
+        if unit == "Wh":
+            raw /= 1000.0
+        elif unit != "kWh":
+            return False
+        entity_id = sample.entity_id
+        meter = self._meters.get(entity_id)
+        if meter is None:
+            self._meters[entity_id] = {
+                "day": time.strftime("%Y-%m-%d", time.localtime(now)),
+                "day_start": raw,
+                "last": raw,
+            }
+            return False
+        if raw < float(meter["last"]):
+            # Meter replaced or reset: start over from the new baseline.
+            meter["day_start"] = raw
+            meter["last"] = raw
+            return False
+        today = time.strftime("%Y-%m-%d", time.localtime(now))
+        if today == meter["day"]:
+            meter["last"] = raw
+            return False
+        # First observation of a new day: yesterday's total is final.
+        daily_kwh = float(meter["last"]) - float(meter["day_start"])
+        meter["day"] = today
+        meter["day_start"] = float(meter["last"])
+        meter["last"] = raw
+        if daily_kwh <= 0:
+            return False
+        return self.check_energy_spike(entity_id, daily_kwh, now)
+
     def flags_for(
         self, samples: list[EntitySample], now: float | None = None
     ) -> list[str]:
@@ -150,4 +200,6 @@ class Checker:
                 flags.append(f"light_always_on:{eid}")
             if self.check_gate_stuck(sample, now):
                 flags.append(f"gate_stuck:{eid}")
+            if self._feed_energy(sample, now):
+                flags.append(f"energy_spike:{eid}")
         return flags

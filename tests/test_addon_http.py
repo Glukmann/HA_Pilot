@@ -50,6 +50,13 @@ async def test_contract_roundtrip(tmp_path, hass, socket_enabled):
     await client.async_confirm(item_id, "yes")
     assert await client.async_get_queue() == []
 
+    # The confirmed decision feeds the learning stats in the status payload.
+    status = await client.async_get_status()
+    assert status["learning"]["total"]["accepted"] == 1
+    assert status["learning"]["by_kind"]["switch"] == {"accepted": 1, "rejected": 0}
+    await client.async_reset("learning")
+    assert state.queue.stats["accepted"] == 0
+
     await client.async_push_vitrine(
         {
             "light.office": {

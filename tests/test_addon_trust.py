@@ -89,3 +89,56 @@ def test_queue_item_serialization():
     item = QueueItem(id="abc", title="T", summary="S")
     assert item.as_dict()["id"] == "abc"
     assert item.as_dict()["title"] == "T"
+
+
+def test_learning_stats_count_decisions(tmp_path):
+    queue, _audit, _rb, _applied = _make_trust(tmp_path)
+    a = queue.propose(
+        "Setpoint?",
+        {
+            "type": "supervisor",
+            "kind": "setpoint",
+            "entity_id": "number.x",
+            "value": 22,
+        },
+    )
+    b = queue.propose(
+        "Proposal?", {"type": "supervisor", "kind": "proposal", "title": "T"}
+    )
+    # Deduped re-propose must not inflate the counter.
+    queue.propose(
+        "Setpoint?",
+        {
+            "type": "supervisor",
+            "kind": "setpoint",
+            "entity_id": "number.x",
+            "value": 22,
+        },
+    )
+    queue.confirm(a, "yes")
+    queue.confirm(b, "no")
+    queue.propose("Silent", {"type": "setpoint_adjust", "rollback_key": "number.y"})
+    learning = queue.as_learning()
+    assert learning["total"] == {
+        "proposed": 2,
+        "accepted": 1,
+        "rejected": 1,
+        "applied_silent": 1,
+    }
+    assert learning["by_kind"] == {
+        "number": {"accepted": 1, "rejected": 0},
+        "proposal": {"accepted": 0, "rejected": 1},
+    }
+
+
+def test_reset_stats_keeps_queue(tmp_path):
+    queue, _audit, _rb, _applied = _make_trust(tmp_path)
+    item = queue.propose("A?", {"type": "x"})
+    queue.confirm(item, "yes")
+    assert queue.stats["accepted"] == 1
+    queue.reset_stats()
+    assert queue.as_learning() == {
+        "total": dict.fromkeys(queue.stats, 0),
+        "by_kind": {},
+    }
+    assert queue.stats["accepted"] == 0

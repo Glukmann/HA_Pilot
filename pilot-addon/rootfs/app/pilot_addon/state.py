@@ -145,7 +145,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.17.0"
+        self.runtime_version = "0.17.1"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -163,6 +163,7 @@ class RuntimeState:
         self.flags: list[str] = []
         self.sessions = ChatSessions(Path(data_dir))
         self.events = EventLog(Path(data_dir) / "events.jsonl")
+        self.supervisor_busy = False  # ручной run из мастерской (ws)
 
     def push_vitrine(self, states: dict[str, dict[str, Any]]) -> None:
         """Merge a pushed batch into the vitrine and journal transitions."""

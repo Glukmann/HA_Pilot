@@ -76,9 +76,27 @@ export function AdminSection() {
   }, []);
 
   const connected = connection === "connected";
+  const [supervisorRunning, setSupervisorRunning] = useState(false);
+  const [supervisorError, setSupervisorError] = useState<string | null>(null);
+
+  const runSupervisorNow = () => {
+    setSupervisorRunning(true);
+    setSupervisorError(null);
+    client
+      .request<{ ok: boolean; started: boolean }>("supervisor/run", {})
+      .catch((err: unknown) => {
+        setSupervisorError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => setSupervisorRunning(false));
+  };
 
   return (
     <>
+      {supervisorError !== null && (
+        <div className="banner banner-error" role="alert">
+          Не удалось запустить: {supervisorError}
+        </div>
+      )}
       {status === null ? (
         <div className="card empty-state">
           <h2>Статус недоступен</h2>
@@ -123,6 +141,21 @@ export function AdminSection() {
               <div className="stat-label">Режим</div>
               <div className="stat-value">{status.mode}</div>
               <div className="stat-hint">пресета {status.persona_preset}</div>
+            </div>
+            <div className="card stat">
+              <div className="stat-label">Супервизор</div>
+              <div className="stat-value">
+                <button
+                  className="btn"
+                  disabled={supervisorRunning || !connected}
+                  onClick={runSupervisorNow}
+                >
+                  {supervisorRunning ? "Выполняется…" : "Запустить сейчас"}
+                </button>
+              </div>
+              <div className="stat-hint">
+                ежедневный run 07:00 — вручную без игры с расписанием
+              </div>
             </div>
           </div>
 

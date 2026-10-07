@@ -411,6 +411,33 @@ async def _cmd_models_activate(
 _DISCOVER_TIMEOUT = aiohttp.ClientTimeout(total=15)
 
 
+async def _cmd_supervisor_run(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Run the daily supervisor now, in the background (cycle 1.6).
+
+    Returns immediately; the run itself is a fire-and-forget task — a
+    daily run takes up to a minute and must never block the socket.
+    """
+    state = session.state
+    if state.supervisor_busy:
+        raise CommandError("супервизор уже выполняется")
+    state.supervisor_busy = True
+
+    async def _run() -> None:
+        from .supervisor import run_supervisor
+
+        try:
+            await run_supervisor(state)
+        except Exception:
+            logger.exception("manual supervisor run failed")
+        finally:
+            state.supervisor_busy = False
+
+    asyncio.get_running_loop().create_task(_run())
+    return {"ok": True, "started": True}
+
+
 async def _cmd_models_discover(
     session: WsSession, payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -574,6 +601,7 @@ def _registry() -> dict[str, CommandHandler]:
         "models/remove": _cmd_models_remove,
         "models/activate": _cmd_models_activate,
         "models/discover": _cmd_models_discover,
+        "supervisor/run": _cmd_supervisor_run,
     }
 
 

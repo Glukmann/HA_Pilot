@@ -36,6 +36,38 @@
           "resolved_when_runtime_back": "This issue clears itself once the Pilot runtime is reachable again."
         }
       }
+    },
+    "core_update_stuck": {
+      "title": "Pilot core migration needs attention",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Core migration not confirmed",
+            "description": "The Pilot add-on jumped to a new core version and the migration health check has not confirmed it yet (target version: {target}). The data snapshot from before the migration: {snapshot}. Open the Pilot workshop (Admin) and check the runtime state before the next restart."
+          }
+        },
+        "abort": {
+          "resolved_when_migration_done": "This issue clears itself once the migration gate confirms the new core version."
+        }
+      }
+    }
+  },
+  "services": {
+    "ask": {
+      "name": "Ask Pilot",
+      "description": "Ask the Pilot agent a question; the answer is fired as a pilot_ask_answered event.",
+      "fields": {
+        "question": { "name": "Question", "description": "The question text." }
+      }
+    },
+    "propose": {
+      "name": "Propose to the owner",
+      "description": "Put a proposal into the Pilot trust queue; the owner confirms or declines in the workshop.",
+      "fields": {
+        "title": { "name": "Title", "description": "Proposal title shown in the queue." },
+        "action": { "name": "Action", "description": "Machine action payload (object)." },
+        "summary": { "name": "Summary", "description": "Optional details." }
+      }
     }
   }
 }

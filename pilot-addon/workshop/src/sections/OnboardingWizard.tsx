@@ -6,6 +6,7 @@ import type { ConfigSetPayload } from "../api/types";
 import { useConfig } from "../hooks/useConfig";
 import { useConnectionState } from "../hooks/useConnectionState";
 import { useStatus } from "../hooks/useStatus";
+import { PROVIDER_PRESETS } from "./providerPresets";
 
 const STEPS = [
   "Знакомство",
@@ -57,6 +58,7 @@ export function OnboardingWizard({ onSkip, onFinish }: OnboardingWizardProps) {
   const [apiKey, setApiKey] = useState("");
   const [budget, setBudget] = useState("10");
   const [schedule, setSchedule] = useState("07:00");
+  const [providerId, setProviderId] = useState("custom");
   const [touched, setTouched] = useState(false);
   const [keyOnPlace, setKeyOnPlace] = useState(false);
   const [supervisorSaved, setSupervisorSaved] = useState(false);
@@ -79,9 +81,13 @@ export function OnboardingWizard({ onSkip, onFinish }: OnboardingWizardProps) {
       return;
     }
     const section = supervisor as Record<string, unknown>;
-    setBaseUrl(typeof section.base_url === "string" ? section.base_url : "");
+    const storedUrl = typeof section.base_url === "string" ? section.base_url : "";
+    setBaseUrl(storedUrl);
     setModel(typeof section.model === "string" ? section.model : "");
     setSchedule(typeof section.schedule === "string" ? section.schedule : "07:00");
+    setProviderId(
+      PROVIDER_PRESETS.find((p) => p.baseUrl === storedUrl)?.id ?? "custom"
+    );
     setKeyOnPlace(Boolean(section.api_key));
   }, [config, touched]);
 
@@ -198,6 +204,35 @@ export function OnboardingWizard({ onSkip, onFinish }: OnboardingWizardProps) {
             лимит расходов.
           </p>
           <div className="wizard-form">
+            <div className="wizard-field">
+              <label htmlFor="ob-provider">Платформа</label>
+              <select
+                id="ob-provider"
+                className="input"
+                value={providerId}
+                disabled={saving}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setProviderId(id);
+                  const preset = PROVIDER_PRESETS.find((p) => p.id === id);
+                  if (preset !== undefined) {
+                    setTouched(true);
+                    setBaseUrl(preset.baseUrl);
+                    setModel(preset.model);
+                  }
+                }}
+              >
+                <option value="custom">Свой провайдер</option>
+                {PROVIDER_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+              <div className="wizard-field-hint">
+                Подставит адрес и модель — вводить останется только API-ключ.
+              </div>
+            </div>
             <div className="wizard-field">
               <label htmlFor="ob-base-url">Base URL провайдера</label>
               <input

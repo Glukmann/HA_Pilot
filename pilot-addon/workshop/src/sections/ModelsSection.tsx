@@ -58,6 +58,9 @@ export function ModelsSection() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Models fetched from the provider (models/discover); null = not fetched. */
+  const [discovered, setDiscovered] = useState<string[] | null>(null);
+  const [discovering, setDiscovering] = useState(false);
 
   const refresh = useCallback(() => {
     client
@@ -118,6 +121,25 @@ export function ModelsSection() {
     const preset = PROVIDER_PRESETS.find((p) => p.id === id);
     if (preset === undefined || draft === null) return;
     setDraft({ ...draft, baseUrl: preset.baseUrl, model: preset.model });
+    setDiscovered(null);
+  };
+
+  const discover = () => {
+    if (draft === null) return;
+    setDiscovering(true);
+    setError(null);
+    client
+      .request<{ models: string[] }>("models/discover", {
+        base_url: draft.baseUrl.trim(),
+        api_key: draft.apiKey.trim() === "" ? "***" : draft.apiKey.trim(),
+        id: draft.id ?? "",
+      })
+      .then((payload) => setDiscovered(payload.models))
+      .catch((err: unknown) => {
+        setDiscovered(null);
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => setDiscovering(false));
   };
 
   if (draft !== null) {
@@ -173,20 +195,59 @@ export function ModelsSection() {
               placeholder="https://api.deepseek.com/v1"
               value={draft.baseUrl}
               disabled={busy}
-              onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
+              onChange={(e) => {
+                setDiscovered(null);
+                setDraft({ ...draft, baseUrl: e.target.value });
+              }}
             />
           </div>
           <div className="wizard-field">
             <label htmlFor="m-model">Модель</label>
-            <input
-              id="m-model"
-              className="input"
-              type="text"
-              placeholder="deepseek-chat"
-              value={draft.model}
-              disabled={busy}
-              onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-            />
+            {discovered !== null ? (
+              <select
+                id="m-model"
+                className="input"
+                value={draft.model}
+                disabled={busy}
+                onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+              >
+                {draft.model !== "" && !discovered.includes(draft.model) && (
+                  <option value={draft.model}>{draft.model} (текущая)</option>
+                )}
+                {discovered.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="m-model"
+                className="input"
+                type="text"
+                placeholder="deepseek-pro"
+                value={draft.model}
+                disabled={busy}
+                onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+              />
+            )}
+            <div className="queue-actions">
+              <button
+                className="btn"
+                disabled={busy || discovering || !/^https?:\/\/.+/.test(draft.baseUrl.trim())}
+                onClick={discover}
+              >
+                {discovering
+                  ? "Спрашиваю у провайдера…"
+                  : discovered !== null
+                    ? "Обновить список"
+                    : "Список моделей с сервера"}
+              </button>
+            </div>
+            <div className="wizard-field-hint">
+              Кнопка запрашивает GET /models у провайдера ключом из формы;
+              при правке с сохранённым ключом используется он.
+            </div>
           </div>
           <div className="wizard-field">
             <label htmlFor="m-api-key">API-ключ</label>

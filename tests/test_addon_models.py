@@ -202,6 +202,118 @@ async def test_models_upsert_validation_errors(addon) -> None:
 
 
 @pytest.fixture
+async def provider(socket_enabled):
+    """Fake LLM provider serving GET /v1/models."""
+    requests: list[tuple[str, dict]] = []
+    status = 200
+    payload: dict = {
+        "data": [
+            {"id": "deepseek-flash"},
+            {"id": "deepseek-pro"},
+            {"id": "deepseek-pro", "created": 1},
+        ]
+    }
+
+    async def _models(request: web.Request) -> web.Response:
+        requests.append((request.path, dict(request.headers)))
+        return web.json_response(payload, status=status)
+
+    app = web.Application()
+    app.router.add_get("/v1/models", _models)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+
+    class FakeProvider:
+        def __init__(self) -> None:
+            self.requests = requests
+
+        @property
+        def url(self) -> str:
+            return f"http://127.0.0.1:{port}/v1"
+
+        def fail(self, code: int) -> None:
+            nonlocal status
+            status = code
+
+        def broken(self) -> None:
+            nonlocal payload
+            payload = {"unexpected": True}
+
+    yield FakeProvider()
+    await runner.cleanup()
+
+
+async def _discover(ws: aiohttp.ClientWebSocketResponse, payload: dict) -> dict:
+    return await _rpc(ws, "models/discover", payload)
+
+
+async def test_models_discover_lists_and_dedupes(addon, provider) -> None:
+    _state, port = addon
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(f"http://127.0.0.1:{port}/ws") as ws:
+            reply = await _discover(
+                ws, {"base_url": provider.url, "api_key": "k"}
+            )
+            assert reply["payload"] == {
+                "models": ["deepseek-flash", "deepseek-pro"]
+            }
+    auth = provider.requests[0][1].get("Authorization")
+    assert auth == "Bearer k"
+
+
+async def test_models_discover_uses_stored_key_for_existing_profile(
+    addon, provider
+) -> None:
+    state, port = addon
+    models, profile_id = upsert(
+        {},
+        {
+            "label": "Fake",
+            "base_url": provider.url,
+            "api_key": "stored-key",
+            "model": "m",
+        },
+    )
+    state.write_config_section("supervisor", {"models": models})
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(f"http://127.0.0.1:{port}/ws") as ws:
+            reply = await _discover(
+                ws, {"base_url": provider.url, "api_key": "***", "id": profile_id}
+            )
+            assert reply["payload"]["models"] == ["deepseek-flash", "deepseek-pro"]
+    assert provider.requests[0][1].get("Authorization") == "Bearer stored-key"
+
+
+async def test_models_discover_error_paths(addon, provider) -> None:
+    _state, port = addon
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(f"http://127.0.0.1:{port}/ws") as ws:
+            # No key, no stored profile.
+            reply = await _discover(ws, {"base_url": provider.url})
+            assert reply["type"] == "error"
+            # Bad base_url.
+            reply = await _discover(ws, {"base_url": "ftp://x", "api_key": "k"})
+            assert reply["type"] == "error"
+            # Provider HTTP error surfaces without the key anywhere.
+            provider.fail(401)
+            reply = await _discover(
+                ws, {"base_url": provider.url, "api_key": "secret-key"}
+            )
+            assert reply["type"] == "error"
+            assert "401" in reply["payload"]["message"]
+            # Broken payload shape.
+            provider.fail(200)
+            provider.broken()
+            reply = await _discover(
+                ws, {"base_url": provider.url, "api_key": "k"}
+            )
+            assert reply["type"] == "error"
+
+
+@pytest.fixture
 async def env(tmp_path, socket_enabled, monkeypatch):
     """Fake LLM/HA backend; supervisor config points at the fake endpoints."""
     state = build_state(tmp_path)

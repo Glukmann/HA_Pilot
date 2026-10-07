@@ -43,6 +43,11 @@ Commands (client -> server), each answered with a frame of the same type:
                                        cannot be removed
     models/activate {id}            -> payload: {ok: true, active_id} — the
                                        daily supervisor run uses the active one
+    models/discover {base_url, api_key, id?} -> payload: {"models": [id, …]}
+                                       — the provider's GET /models, fetched by
+                                       the add-on (browser CORS bypass); empty or
+                                       "***" api_key uses the stored key of the
+                                       profile given by id; the key never logs
 
 Server -> client events:
     log    new record for log subscribers (after logs/subscribe)
@@ -65,8 +70,10 @@ import asyncio
 from collections.abc import Awaitable, Callable
 import json
 import logging
+import re
 from typing import Any
 
+import aiohttp
 from aiohttp import WSMsgType, web
 
 from .logbuffer import LogBuffer
@@ -401,6 +408,53 @@ async def _cmd_models_activate(
     return {"ok": True, "active_id": profile_id}
 
 
+_DISCOVER_TIMEOUT = aiohttp.ClientTimeout(total=15)
+
+
+async def _cmd_models_discover(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """List the provider's models (GET {base_url}/models, OpenAI-style).
+
+    The key comes from the form; when it is empty or the mask and an
+    existing profile id is given, the stored key of that profile is used.
+    The key is sent only to its own provider and never logged or audited.
+    """
+    base_url = str(payload.get("base_url") or "").strip().rstrip("/")
+    if not re.match(r"^https?://", base_url):
+        raise CommandError("base_url должен начинаться с http:// или https://")
+    api_key = str(payload.get("api_key") or "").strip()
+    if api_key in ("", _SECRET_MASK):
+        section = _supervisor_section(session.state)
+        profile_id = str(payload.get("id") or "")
+        profile = next((p for p in profiles_of(section) if p["id"] == profile_id), None)
+        if profile is None or not profile.get("api_key"):
+            raise CommandError("Нужен API-ключ, чтобы спросить список моделей")
+        api_key = str(profile["api_key"])
+    try:
+        async with aiohttp.ClientSession(timeout=_DISCOVER_TIMEOUT) as http:
+            async with http.get(
+                f"{base_url}/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+            ) as resp:
+                if resp.status != 200:
+                    raise CommandError(f"провайдер ответил HTTP {resp.status}")
+                data = await resp.json()
+    except aiohttp.ClientError as err:
+        raise CommandError(f"запрос к провайдеру не удался: {err}") from err
+    items = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        raise CommandError("провайдер вернул неожиданный формат списка")
+    models = sorted(
+        {str(m["id"]) for m in items if isinstance(m, dict) and m.get("id")}
+    )
+    session.state.queue._audit.record(
+        "models.discover", {"base_url": base_url, "count": len(models)}
+    )
+    logger.info("models.discover base_url=%s count=%d", base_url, len(models))
+    return {"models": models}
+
+
 def _get_named(state: RuntimeState, kind: str, name: Any) -> dict[str, Any]:
     """Shared get for prompts/skills; CommandError on bad or unknown names."""
     try:
@@ -519,6 +573,7 @@ def _registry() -> dict[str, CommandHandler]:
         "models/upsert": _cmd_models_upsert,
         "models/remove": _cmd_models_remove,
         "models/activate": _cmd_models_activate,
+        "models/discover": _cmd_models_discover,
     }
 
 

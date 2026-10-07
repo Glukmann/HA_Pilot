@@ -69,7 +69,9 @@ class PilotConversationEntity(ConversationEntity):
         """One turn: ask the runtime, execute safe actions, enqueue the rest."""
         client = self.coordinator.api
         try:
-            result = await client.async_ask(user_input.text)
+            result = await client.async_ask(
+                user_input.text, conversation_id=user_input.conversation_id
+            )
         except (CannotConnect, PilotApiError) as err:
             _LOGGER.debug("Pilot runtime unavailable: %s", err)
             return self._reply(user_input, "Пилот сейчас недоступен, попробуйте позже.")

@@ -13,6 +13,7 @@ from pathlib import Path
 import time
 from typing import Any
 
+from .chatsessions import ChatSessions
 from .coregate import pending_update
 from .modelstore import resolve_section
 
@@ -143,7 +144,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.12.2"
+        self.runtime_version = "0.13.0"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -158,6 +159,7 @@ class RuntimeState:
         }
         self.vitrine = VitrineState()
         self.flags: list[str] = []
+        self.sessions = ChatSessions(Path(data_dir))
 
     def reset_cost_if_new_day(self) -> bool:
         """Reset cost_today on the first event of a new local day.

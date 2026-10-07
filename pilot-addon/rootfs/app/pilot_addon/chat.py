@@ -35,7 +35,7 @@ CHAT_SYSTEM_PROMPT = """Ты — Пилот, голосовой жилец ум�
 
 Жёсткие правила:
 - Отвечай СТРОГО одним JSON-объектом, без текста вне JSON.
-- Поле "say" — твоя короткая реплика хозяину (1-2 предложения, на русском).
+- Поле "say" — твоя реплика хозяину (на русском, длина — по стилю ниже).
 - Поле "actions" — список сервис-вызовов HA, которые нужны для просьбы \
 хозяина. Пустой список, если хозяин просто спрашивает.
 - Каждый вызов: {"domain", "service", "entity_id", "data" (можно пустой)}.
@@ -45,22 +45,72 @@ CHAT_SYSTEM_PROMPT = """Ты — Пилот, голосовой жилец ум�
   состояние устройства. Отвечай про устройство по его основной сущности.
 - Ты НЕ исполняешь действия сам — их исполнит рантайм по своим правилам \
 безопасности. Камеры и охрану не трогай вообще.
+- Используй недавний диалог ниже: «тот же», «его», «а ещё» отсылают к нему.
 - Если просьба неоднозначна — не действуй, уточни в "say".
 
 Формат ответа:
 {"say": "…", "actions": []}"""
+
+PRESET_NAMES = {
+    "butler": "Дворецкий",
+    "observer": "Тихий наблюдатель",
+    "economy": "Эконом",
+}
+MODE_NAMES = {
+    "normal": "обычный",
+    "vacation": "отпуск (дом пустует)",
+    "guests": "гости",
+    "sick": "кто-то болеет",
+}
+
+
+def _persona_block(state: RuntimeState) -> str:
+    """Persona/mode/focus appended to the system prompt — the voice tuning."""
+    verbosity = state.persona.get("verbosity", 50)
+    if verbosity < 30:
+        style = "Отвечай предельно коротко: одно предложение, без вступлений."
+    elif verbosity < 70:
+        style = "Отвечай кратко: 1–2 предложения по существу."
+    else:
+        style = "Отвечай развёрнуто: контекст, детали, что предпринято."
+    lines = [
+        "",
+        "Стиль и обстановка:",
+        "- Пресет персоны: "
+        f"«{PRESET_NAMES.get(state.persona_preset, state.persona_preset)}» "
+        f"(дворецкий {state.persona.get('butler_observer', 50)}/100, "
+        f"вежливость {state.persona.get('politeness', 50)}/100, "
+        f"осторожность {state.persona.get('conservative', 50)}/100).",
+        f"- Режим дома: {MODE_NAMES.get(state.mode, state.mode)}.",
+        style,
+    ]
+    if state.current_focus.strip():
+        lines.append(f"- Текущий фокус хозяина: {state.current_focus.strip()}.")
+    return "\n".join(lines)
+
+
+def _history_block(state: RuntimeState, conversation_id: str) -> str:
+    """Render the recent turns of this conversation for the prompt."""
+    turns = state.sessions.history(conversation_id)
+    if not turns:
+        return ""
+    who = {"user": "Хозяин", "assistant": "Пилот"}
+    lines = ["Недавний диалог:", *[f"{who[t['role']]}: {t['text']}" for t in turns]]
+    return "\n".join(lines)
 
 
 async def chat_ask(
     state: RuntimeState,
     message: str,
     *,
+    conversation_id: str | None = None,
     http_session: aiohttp.ClientSession | None = None,
 ) -> dict[str, Any]:
     """Answer one chat message; never raises, always something to say."""
     state.reset_cost_if_new_day()
     audit = state.queue._audit
     base: dict[str, Any] = {"say": "", "actions": []}
+    conversation_id = conversation_id or "default"
 
     config = load_supervisor_config(state)
     if config is None:
@@ -89,17 +139,27 @@ async def chat_ask(
             " дом больше окна контекста)"
         )
     user_message = "\n".join(
-        [header, *lines, "", f"Сообщение хозяина: {message}"]
+        part
+        for part in [
+            header,
+            *lines,
+            "",
+            _history_block(state, conversation_id),
+            f"Сообщение хозяина: {message}",
+        ]
+        if part
     )
+    system_prompt = CHAT_SYSTEM_PROMPT + _persona_block(state)
     own_session = http_session is None
     session = http_session or aiohttp.ClientSession()
     try:
         try:
             content, usage = await _ask_llm(
-                session, config, CHAT_SYSTEM_PROMPT, user_message
+                session, config, system_prompt, user_message
             )
         except Exception as err:
             audit.record("chat.error", {"error": str(err)})
+            state.sessions.append(conversation_id, "user", message)
             return {
                 **base,
                 "say": "Не смог дозвониться до модели, попробуйте ещё раз.",
@@ -110,6 +170,7 @@ async def chat_ask(
             say, actions = _parse_answer(content)
         except ValueError as err:
             audit.record("chat.parse_error", {"error": str(err)})
+            state.sessions.append(conversation_id, "user", message)
             return {
                 **base,
                 "say": "Модель ответила непонятно, попробуйте иначе.",
@@ -127,6 +188,8 @@ async def chat_ask(
                 "queued": sum(1 for a in planned if a["mode"] == "queue"),
             },
         )
+        state.sessions.append(conversation_id, "user", message)
+        state.sessions.append(conversation_id, "assistant", say)
         return {"say": say, "actions": planned, "cost": round(cost, 6)}
     finally:
         if own_session:

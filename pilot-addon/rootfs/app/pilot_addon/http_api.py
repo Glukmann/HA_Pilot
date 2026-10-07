@@ -163,7 +163,8 @@ def create_app(
         message = str(body.get("message") or "").strip()
         if not message:
             return web.json_response({"error": "message required"}, status=400)
-        result = await chat_ask(state, message)
+        conversation_id = str(body.get("conversation_id") or "").strip() or None
+        result = await chat_ask(state, message, conversation_id=conversation_id)
         return web.json_response(result)
 
     async def vitrine(request: web.Request) -> web.Response:

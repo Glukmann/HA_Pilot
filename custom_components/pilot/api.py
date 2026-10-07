@@ -94,10 +94,17 @@ class PilotApiClient:
             "POST", f"{API_PREFIX}/vitrine/update", json={"states": states}
         )
 
-    async def async_ask(self, message: str) -> dict[str, Any]:
-        """One Assist turn: {"say", "actions": [{mode: direct|queue|refuse, …}]}."""
+    async def async_ask(
+        self, message: str, conversation_id: str | None = None
+    ) -> dict[str, Any]:
+        """One Assist turn: {"say", "actions": [{mode: direct|queue|refuse, …}]}.
+
+        conversation_id keys the dialog history kept by the runtime.
+        """
         return await self._request(
-            "POST", f"{API_PREFIX}/chat", json={"message": message}
+            "POST",
+            f"{API_PREFIX}/chat",
+            json={"message": message, "conversation_id": conversation_id},
         )
 
     async def async_enqueue(

@@ -83,7 +83,6 @@ class PilotConversationEntity(ConversationEntity):
 
         executed = 0
         executed_names: list[str] = []
-        queued = 0
         refused = 0
         failed = 0
         for action in actions:
@@ -91,10 +90,9 @@ class PilotConversationEntity(ConversationEntity):
             if mode == "refuse":
                 refused += 1
                 continue
-            if mode == "queue":
-                if await self._enqueue(action, client):
-                    queued += 1
-                continue
+            # An explicit owner command IS the confirmation. The trust
+            # queue exists for agent-initiated proposals (supervisor runs,
+            # pattern suggestions) — not for orders the owner just gave.
             if await self._execute(action):
                 executed += 1
                 executed_names.append(str(action.get("entity_id") or "действие"))
@@ -106,8 +104,6 @@ class PilotConversationEntity(ConversationEntity):
         suffix: list[str] = []
         if executed:
             suffix.append(f"Выполнено: {', '.join(executed_names)}.")
-        if queued:
-            suffix.append("Ждёт вашего подтверждения в мастерской (Очередь).")
         if refused:
             suffix.append("Камеры и охрану из чата не трогаю.")
         if failed:

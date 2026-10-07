@@ -60,7 +60,7 @@ async def test_chat_agent_registered(hass, aioclient_mock):
 
 
 async def test_direct_action_executed_in_ha(hass, aioclient_mock):
-    """A whitelisted action runs through HA services; the rest is enqueued."""
+    """A whitelisted action runs through HA services with a report."""
     calls: list[tuple[str, str, dict]] = []
     hass.services.async_register(
         "pilot_test",
@@ -80,31 +80,55 @@ async def test_direct_action_executed_in_ha(hass, aioclient_mock):
                     "data": {"brightness": 3},
                     "mode": "direct",
                 },
-                {
-                    "domain": "switch",
-                    "service": "turn_on",
-                    "entity_id": "switch.pump",
-                    "data": {},
-                    "mode": "queue",
-                },
             ],
         ),
     )
-    aioclient_mock.post("http://pilot:8899/api/queue", json={"ok": True, "id": "q1"})
     _entry, agent = await _setup_agent(hass, aioclient_mock)
 
     result = await agent.async_process(_input("выключи свет в холле"))
     speech = result.response.speech["plain"]["speech"]
     assert "Готово." in speech
     assert "Выполнено: pilot_test.demo" in speech  # deterministic accounting
-    assert "мастерской" in speech  # queued action disclosed
 
     assert calls == [
         ("pilot_test", "poke", {"brightness": 3, "entity_id": "pilot_test.demo"})
     ]
-    queue_call = aioclient_mock.mock_calls[-1]
-    assert queue_call[0] == "POST"
-    assert "/api/queue" in str(queue_call[1])
+
+
+async def test_owner_command_executes_including_non_whitelisted(hass, aioclient_mock):
+    """An explicit chat command IS the confirmation: switch (normally
+    'queue' for agent proposals) executes directly; no queue POST."""
+    calls: list[tuple[str, str, dict]] = []
+    hass.services.async_register(
+        "switch",
+        "turn_on",
+        lambda call: calls.append(("switch", "turn_on", dict(call.data))),
+    )
+    _mock_api(aioclient_mock)
+    aioclient_mock.post(
+        "http://pilot:8899/api/chat",
+        json=_chat_payload(
+            "Делаю.",
+            [
+                {
+                    "domain": "switch",
+                    "service": "turn_on",
+                    "entity_id": "switch.kotel_kabinet_rele",
+                    "data": {},
+                    "mode": "queue",
+                },
+            ],
+        ),
+    )
+    _entry, agent = await _setup_agent(hass, aioclient_mock)
+
+    result = await agent.async_process(_input("включи реле котла"))
+    speech = result.response.speech["plain"]["speech"]
+    assert "Делаю." in speech
+    assert "Выполнено: switch.kotel_kabinet_rele" in speech
+    assert calls == [("switch", "turn_on", {"entity_id": "switch.kotel_kabinet_rele"})]
+    # Owner commands never touch the proposal queue.
+    assert all("/api/queue" not in str(call) for call in aioclient_mock.mock_calls)
 
 
 async def test_question_without_actions(hass, aioclient_mock):

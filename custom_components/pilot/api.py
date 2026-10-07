@@ -95,16 +95,21 @@ class PilotApiClient:
         )
 
     async def async_ask(
-        self, message: str, conversation_id: str | None = None
+        self, message: str, conversation_id: str | None = None, language: str = ""
     ) -> dict[str, Any]:
         """One Assist turn: {"say", "actions": [{mode: direct|queue|refuse, …}]}.
 
-        conversation_id keys the dialog history kept by the runtime.
+        conversation_id keys the dialog history; language (e.g. "ru-RU")
+        drives the reply language, falling back to the runtime default.
         """
         return await self._request(
             "POST",
             f"{API_PREFIX}/chat",
-            json={"message": message, "conversation_id": conversation_id},
+            json={
+                "message": message,
+                "conversation_id": conversation_id,
+                "language": language,
+            },
         )
 
     async def async_enqueue(

@@ -70,7 +70,9 @@ class PilotConversationEntity(ConversationEntity):
         client = self.coordinator.api
         try:
             result = await client.async_ask(
-                user_input.text, conversation_id=user_input.conversation_id
+                user_input.text,
+                conversation_id=user_input.conversation_id,
+                language=user_input.language,
             )
         except (CannotConnect, PilotApiError) as err:
             _LOGGER.debug("Pilot runtime unavailable: %s", err)

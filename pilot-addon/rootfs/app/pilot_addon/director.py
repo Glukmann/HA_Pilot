@@ -1,14 +1,17 @@
 """Deterministic chat fallback: simple asks answered without any LLM call.
 
-Recognised shapes (Russian, deliberately narrow — anything else goes to
-the LLM):
+Recognised shapes (per the language tables in i18n.py, deliberately
+narrow — anything else goes to the LLM):
 
-- «(выключи|включи|переключи) свет в <комнате>» -> light turn_on/off/toggle
-  for every light in that area (safety.classify re-checks each action);
-- «какая температура в <комнатате>?» -> every °C reading in the area with
-  its device name, device-internal probes (router radio, chips) excluded —
-  or an honest "no air sensor here" instead of a name-similarity guess;
-- «поставь 22 [градуса] в <комнате>» -> climate.set_temperature.
+- «(выключи|включи|переключи) свет в <комнате>» / "turn off the lights in
+  <room>" -> light turn_on/off/toggle for every light in that area
+  (safety.classify re-checks each action);
+- «какая температура в <комнате>?» / "what's the temperature in <room>?"
+  -> every °C reading in the area with its device name, device-internal
+  probes (router radio, chips) excluded — or an honest "no air sensor
+  here" instead of a name-similarity guess;
+- «поставь 22 [градуса] в <комнате>» / "set 22 in <room>" ->
+  climate.set_temperature.
 
 Returns the same contract as chat_ask ({"say", "actions", "cost": 0,
 "fallback": True}) or None when not confident. Zero tokens.
@@ -19,19 +22,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .i18n import table
 from .safety import classify
 from .state import RuntimeState
-
-_LIGHT_VERBS = (
-    ("выключи", "turn_off"),
-    ("погаси", "turn_off"),
-    ("выруби", "turn_off"),
-    ("включи", "turn_on"),
-    ("зажги", "turn_on"),
-    ("вруби", "turn_on"),
-    ("переключи", "toggle"),
-)
-_SET_VERBS = ("поставь", "установи", "выставь", "сделай")
 
 # Device-internal readings that must never answer for room climate.
 _DIAGNOSTIC_MARKERS = (
@@ -128,27 +121,33 @@ def _climates(state: RuntimeState, area: str) -> list[str]:
     ]
 
 
-def direct_answer(state: RuntimeState, message: str) -> dict[str, Any] | None:
+def direct_answer(
+    state: RuntimeState, message: str, language: str = "ru"
+) -> dict[str, Any] | None:
     """Parse a simple ask; None means 'not confident, hand to the LLM'."""
+    t = table(language)
     text = _norm(message).rstrip("?!.")
-    if "свет" in text:
-        for verb, service in _LIGHT_VERBS:
+    if t["light_noun"] in text:
+        for verb, service in t["light_verbs"]:
             if text.startswith(verb):
-                return _lights_answer(state, text, verb, service)
-    if "температур" in text and text.startswith(
-        ("какая", "какова", "сколько", "что за")
-    ):
-        return _temperature_answer(state, text)
-    for verb in _SET_VERBS:
+                answer = _lights_answer(state, text, service, t)
+                if answer is not None:
+                    return answer
+    if t["temp_word"] in text and text.startswith(t["temp_starts"]):
+        return _temperature_answer(state, text, t)
+    for verb in t["set_verbs"]:
         if text.startswith(verb):
-            answer = _setpoint_answer(state, text, verb)
+            answer = _setpoint_answer(state, text, t)
             if answer is not None:
                 return answer
     return None
 
 
 def _lights_answer(
-    state: RuntimeState, text: str, verb: str, service: str
+    state: RuntimeState,
+    text: str,
+    service: str,
+    t: dict[str, Any],
 ) -> dict[str, Any] | None:
     area = _match_area(state, text)
     if area is None:
@@ -156,7 +155,7 @@ def _lights_answer(
     lights = _lights(state, area)
     if not lights:
         return {
-            "say": f"В «{area}» нет световых устройств.",
+            "say": t["say"]["lights_none"].format(area=area),
             "actions": [],
             "cost": 0.0,
             "fallback": True,
@@ -173,54 +172,45 @@ def _lights_answer(
     ]
     if any(a["mode"] != "direct" for a in actions):
         return None  # safety layer disagrees — escalate to the LLM path
-    done = {"turn_on": "Включаю", "turn_off": "Выключаю", "toggle": "Переключаю"}[
-        service
-    ]
     return {
-        "say": f"{done} свет в «{area}» ({len(lights)}).",
+        "say": t["say"][service].format(area=area, count=len(lights)),
         "actions": actions,
         "cost": 0.0,
         "fallback": True,
     }
 
 
-def _temperature_answer(state: RuntimeState, text: str) -> dict[str, Any] | None:
+def _temperature_answer(
+    state: RuntimeState, text: str, t: dict[str, Any]
+) -> dict[str, Any] | None:
     area = _match_area(state, text)
     if area is None:
         return None
     readings = _temp_readings(state, area)
     if not readings:
         return {
-            "say": (
-                f"Датчика температуры воздуха в «{area}» нет — "
-                "подходящих показаний не вижу."
-            ),
+            "say": t["say"]["temp_none"].format(area=area),
             "actions": [],
             "cost": 0.0,
             "fallback": True,
         }
     listing = "; ".join(f"{name} — {value}" for name, value in readings)
     return {
-        "say": f"Температурные показания в «{area}»: {listing}.",
+        "say": t["say"]["temp_listing"].format(area=area, listing=listing),
         "actions": [],
         "cost": 0.0,
         "fallback": True,
     }
 
 
-_SETPOINT_RE = re.compile(
-    r"^(поставь|установи|выставь|сделай)\s+(\d{1,2}(?:[.,]\d+)?)\s*"
-    r"(?:градус\w*)?\s*(?:в\s+(.+))?$"
-)
-
-
 def _setpoint_answer(
-    state: RuntimeState, text: str, verb: str
+    state: RuntimeState, text: str, t: dict[str, Any]
 ) -> dict[str, Any] | None:
-    match = _SETPOINT_RE.match(text)
+    match = re.match(t["setpoint_re"], text)
     if match is None:
         return None
-    raw_value, raw_area = match.group(2), match.group(3)
+    raw_value = match.group("value")
+    raw_area = match.group("area")
     area = _match_area(state, raw_area) if raw_area else None
     if area is None:
         return None
@@ -245,7 +235,7 @@ def _setpoint_answer(
     if action["mode"] != "direct":
         return None
     return {
-        "say": f"Ставлю {value} °C в «{area}».",
+        "say": t["say"]["setpoint"].format(area=area, value=value),
         "actions": [action],
         "cost": 0.0,
         "fallback": True,

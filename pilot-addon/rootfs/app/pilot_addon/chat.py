@@ -23,6 +23,23 @@ from typing import Any
 import aiohttp
 
 from .director import direct_answer
+from .i18n import (
+    CHAT_SYSTEM_PROMPTS,
+    MODE_NAMES,
+    OWNER_MEMORY_TITLES,
+    PERSONA_BLOCK_FOCUS,
+    PERSONA_BLOCK_SLIDERS,
+    PERSONA_BLOCK_TITLES,
+    PRESET_NAMES,
+    PROMPT_HEADER_TRUNC,
+    PROMPT_HEADER_VITRINE,
+    PROMPT_HISTORY_TITLE,
+    PROMPT_OWNER_MESSAGE,
+    PROMPT_ROLES,
+    VERBOSITY_STYLES,
+    VERBOSITY_STYLES_LONG,
+    resolve_language,
+)
 from .safety import classify
 from .state import RuntimeState
 from .supervisor import _accrue_cost, _ask_llm, load_supervisor_config
@@ -31,79 +48,45 @@ logger = logging.getLogger("pilot.addon")
 
 MAX_VITRINE_LINES = 300
 
-CHAT_SYSTEM_PROMPT = """Ты — Пилот, голосовой жилец умного дома. Хозяин пишет \
-тебе из чата Home Assistant. У тебя есть актуальная карта дома (витрина).
 
-Жёсткие правила:
-- Отвечай СТРОГО одним JSON-объектом, без текста вне JSON.
-- Поле "say" — твоя реплика хозяину (на русском, длина — по стилю ниже).
-- Поле "actions" — список сервис-вызовов HA, которые нужны для просьбы \
-хозяина. Пустой список, если хозяин просто спрашивает.
-- Каждый вызов: {"domain", "service", "entity_id", "data" (можно пустой)}.
-  Только сущности из карты дома выше. Не выдумывай entity_id.
-- Значения с % — влажность или заряд батарейки датчика; названия вида
-  «…Батарея», «…Влажность», «…Sampling interval» — НЕ температура и НЕ
-  состояние устройства. Отвечай про устройство по его основной сущности.
-- Показатели самих устройств (роутер: «2.4 ГГц», «5 ГГц», нагрев радио,
-  CPU, память, сигнал, аптайм; розетки: мощность, энергия; реле:
-  countdown) — это диагностика железа, а НЕ климат комнаты и не состояние
-  комнаты. Никогда не выдавай их за температуру/влажность воздуха.
-- Если в комнате нет подходящей сущности (датчика температуры воздуха,
-  освещённости и т.п.) — честно скажи: «датчика в <комнате> нет». НЕ
-  подставляй ближайшее совпадение по названию — лучше признайся.
-- Ты НЕ исполняешь действия сам — их исполнит рантайм по своим правилам \
-безопасности. Камеры и охрану не трогай вообще.
-- Используй недавний диалог ниже: «тот же», «его», «а ещё» отсылают к нему.
-- Если просьба неоднозначна — не действуй, уточни в "say".
-
-Формат ответа:
-{"say": "…", "actions": []}"""
-
-PRESET_NAMES = {
-    "butler": "Дворецкий",
-    "observer": "Тихий наблюдатель",
-    "economy": "Эконом",
-}
-MODE_NAMES = {
-    "normal": "обычный",
-    "vacation": "отпуск (дом пустует)",
-    "guests": "гости",
-    "sick": "кто-то болеет",
-}
-
-
-def _persona_block(state: RuntimeState) -> str:
+def _persona_block(state: RuntimeState, language: str) -> str:
     """Persona/mode/focus appended to the system prompt — the voice tuning."""
     verbosity = state.persona.get("verbosity", 50)
-    if verbosity < 30:
-        style = "Отвечай предельно коротко: одно предложение, без вступлений."
-    elif verbosity < 70:
-        style = "Отвечай кратко: 1–2 предложения по существу."
-    else:
-        style = "Отвечай развёрнуто: контекст, детали, что предпринято."
+    style = VERBOSITY_STYLES_LONG[language]
+    for limit, candidate in VERBOSITY_STYLES[language]:
+        if verbosity < limit:
+            style = candidate
+            break
+    titles = PERSONA_BLOCK_TITLES[language]
+    sliders = PERSONA_BLOCK_SLIDERS[language]
+    preset = PRESET_NAMES[language].get(state.persona_preset, state.persona_preset)
     lines = [
         "",
-        "Стиль и обстановка:",
-        "- Пресет персоны: "
-        f"«{PRESET_NAMES.get(state.persona_preset, state.persona_preset)}» "
-        f"(дворецкий {state.persona.get('butler_observer', 50)}/100, "
-        f"вежливость {state.persona.get('politeness', 50)}/100, "
-        f"осторожность {state.persona.get('conservative', 50)}/100).",
-        f"- Режим дома: {MODE_NAMES.get(state.mode, state.mode)}.",
+        titles[0],
+        (
+            f"{titles[1]} «{preset}» "
+            f"({sliders[0]} {state.persona.get('butler_observer', 50)}/100, "
+            f"{sliders[1]} {state.persona.get('politeness', 50)}/100, "
+            f"{sliders[2]} {state.persona.get('conservative', 50)}/100)."
+        ),
+        f"{titles[2]} {MODE_NAMES[language].get(state.mode, state.mode)}.",
         style,
     ]
     if state.current_focus.strip():
-        lines.append(f"- Текущий фокус хозяина: {state.current_focus.strip()}.")
+        lines.append(f"{PERSONA_BLOCK_FOCUS[language]} {state.current_focus.strip()}.")
     return "\n".join(lines)
 
 
-def _history_block(state: RuntimeState, conversation_id: str) -> str:
+def _history_block(state: RuntimeState, conversation_id: str, language: str) -> str:
     """Render the recent turns of this conversation for the prompt."""
     turns = state.sessions.history(conversation_id)
     if not turns:
         return ""
-    who = {"user": "Хозяин", "assistant": "Пилот"}
-    lines = ["Недавний диалог:", *[f"{who[t['role']]}: {t['text']}" for t in turns]]
+    who = PROMPT_ROLES[language]
+    lines = [
+        PROMPT_HISTORY_TITLE[language],
+        *[f"{who[t['role']]}: {t['text']}" for t in turns],
+    ]
     return "\n".join(lines)
 
 
@@ -111,20 +94,18 @@ _OWNER_MEMORY_REJECTS = 8
 _OWNER_MEMORY_AUDIT_TAIL = 300
 
 
-def _owner_memory_block(state: RuntimeState) -> str:
-    """Learning stats + recent rejections — the owner's decision history.
-
-    Lets the chat reason about habits ("в прошлый раз ты отклонил…")
-    instead of asking the same thing twice. Rejections are read from the
-    append-only audit tail; titles only, no secrets.
-    """
+def _owner_memory_block(state: RuntimeState, language: str) -> str:
+    """Learning stats + recent rejections — the owner's decision history."""
+    labels = OWNER_MEMORY_TITLES[language]
     learning = state.queue.as_learning()
     total = learning["total"]
     lines = [
-        "История решений хозяина:",
-        (
-            f"- Всего: предложено {total['proposed']}, принято {total['accepted']}, "
-            f"отклонено {total['rejected']}, применено молча {total['applied_silent']}."
+        labels["title"],
+        labels["total"].format(
+            proposed=total["proposed"],
+            accepted=total["accepted"],
+            rejected=total["rejected"],
+            silent=total["applied_silent"],
         ),
     ]
     kinds = sorted(
@@ -134,13 +115,12 @@ def _owner_memory_block(state: RuntimeState) -> str:
     )[:5]
     if kinds:
         detail = "; ".join(
-            f"{kind}: принято {v['accepted']}/отклонено {v['rejected']}"
-            for kind, v in kinds
+            labels["kinds_pair"].format(kind=kind, **v) for kind, v in kinds
         )
-        lines.append(f"- По видам действий: {detail}.")
+        lines.append(f"{labels['kinds_prefix']}{detail}.")
     rejections = _recent_rejection_titles(state)
     if rejections:
-        lines.append("- Недавние отказы:")
+        lines.append(labels["rejects_title"])
         lines.extend(f"  - {title}" for title in rejections)
     return "\n".join(lines)
 
@@ -171,6 +151,7 @@ async def chat_ask(
     message: str,
     *,
     conversation_id: str | None = None,
+    language: str | None = None,
     http_session: aiohttp.ClientSession | None = None,
 ) -> dict[str, Any]:
     """Answer one chat message; never raises, always something to say."""
@@ -178,6 +159,7 @@ async def chat_ask(
     audit = state.queue._audit
     base: dict[str, Any] = {"say": "", "actions": []}
     conversation_id = conversation_id or "default"
+    lang = resolve_language(state, language)
 
     config = load_supervisor_config(state)
     if config is None:
@@ -198,7 +180,7 @@ async def chat_ask(
         }
 
     # Deterministic fast path: simple asks never reach the LLM (0 tokens).
-    direct = direct_answer(state, message)
+    direct = direct_answer(state, message, lang)
     if direct is not None:
         audit.record(
             "chat.fallback",
@@ -210,11 +192,10 @@ async def chat_ask(
 
     all_lines = state.vitrine.lines
     lines = all_lines[-MAX_VITRINE_LINES:]
-    header = "Карта дома (витрина):"
+    header = PROMPT_HEADER_VITRINE[lang]
     if len(lines) < len(all_lines):
-        header += (
-            f" (показаны последние {len(lines)} из {len(all_lines)} строк —"
-            " дом больше окна контекста)"
+        header += PROMPT_HEADER_TRUNC[lang].format(
+            shown=len(lines), total=len(all_lines)
         )
     user_message = "\n".join(
         part
@@ -222,13 +203,13 @@ async def chat_ask(
             header,
             *lines,
             "",
-            _owner_memory_block(state),
-            _history_block(state, conversation_id),
-            f"Сообщение хозяина: {message}",
+            _owner_memory_block(state, lang),
+            _history_block(state, conversation_id, lang),
+            f"{PROMPT_OWNER_MESSAGE[lang]} {message}",
         ]
         if part
     )
-    system_prompt = CHAT_SYSTEM_PROMPT + _persona_block(state)
+    system_prompt = CHAT_SYSTEM_PROMPTS[lang] + _persona_block(state, lang)
     own_session = http_session is None
     session = http_session or aiohttp.ClientSession()
     try:

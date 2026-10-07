@@ -219,3 +219,67 @@ def propose_norms(
         logger.info("norm proposed: %s", title)
         break  # лимитер назойливости: одна норма в день
     return proposed
+
+
+# -- deviations ---------------------------------------------------------------------
+
+
+def _entity_name(state: Any, eid: str) -> str:
+    sample = state.vitrine.states.get(eid)
+    attrs = sample.get("attrs") if isinstance(sample, dict) else None
+    attrs = attrs if isinstance(attrs, dict) else {}
+    return str(attrs.get("friendly_name") or eid)
+
+
+# Flag prefix -> (template key, neutralising service call).
+_DEVIATION_RULES: dict[str, tuple[str, str, str]] = {
+    # flag prefix: (locales key, service, data)
+    "light_always_on": ("deviation.light", "turn_off", ""),
+    "gate_stuck": ("deviation.gate", "turn_off", ""),
+}
+
+
+def propose_deviations(
+    state: Any, now: float | None = None, language: str = "ru"
+) -> list[str]:
+    """Turn checker deviation flags into 'neutralise it?' proposals.
+
+    Same trust discipline as norms: proposals only, dedup while
+    unanswered, at most one deviation proposal per day, silent outside
+    the normal mode. Accepted 'yes' executes the neutralising call —
+    through the executor, which re-checks the reversible whitelist.
+    """
+    now = now or time.time()
+    if state.mode != "normal":
+        return []
+    meta = _load_meta(state)
+    today = time.strftime("%Y-%m-%d", time.localtime(now))
+    if meta.get("last_deviation_day") == today:
+        return []
+
+    for flag in state.flags:
+        prefix, _, eid = flag.partition(":")
+        rule = _DEVIATION_RULES.get(prefix)
+        if rule is None or not eid:
+            continue
+        key, service, _ = rule
+        action = {
+            "type": "deviation",
+            "domain": eid.split(".", 1)[0],
+            "service": service,
+            "entity_id": eid,
+            "data": {},
+        }
+        if any(item.action == action for item in state.queue.items):
+            continue
+        title = _norm_text(key, language).format(name=_entity_name(state, eid))
+        item_id = state.queue.propose(
+            title=title,
+            summary="Отклонение от обычного поведения (checker-слой)",
+            action=action,
+        )
+        meta["last_deviation_day"] = today
+        _save_meta(state, meta)
+        logger.info("deviation proposed: %s", title)
+        return [item_id]
+    return []

@@ -1,3 +1,5 @@
 key,ru,en
 norm.propose.on,"Норма: {name} включается около {time} ({days} из {window} дней) — автоматизировать?","Norm: {name} turns on around {time} ({days} of {window} days) — automate it?"
 norm.propose.off,"Норма: {name} выключается около {time} ({days} из {window} дней) — автоматизировать?","Norm: {name} turns off around {time} ({days} of {window} days) — automate it?"
+deviation.light,"Свет «{name}» горит всю ночь — погасить?","The light «{name}» has been on all night — turn it off?"
+deviation.gate,"«{name}» открыто дольше обычного — закрыть?","{name} has been open unusually long — close it?"

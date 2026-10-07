@@ -219,3 +219,54 @@ def test_apply_without_event_loop_is_skipped(tmp_path):
     text = (tmp_path / "logs" / "audit.jsonl").read_text(encoding="utf-8")
     events = [json.loads(line)["event"] for line in text.strip().splitlines()]
     assert "action.executor.skipped" in events
+
+
+async def test_deviation_service_call_executes_when_whitelisted(fake_ha: FakeHa):
+    """A confirmed 'turn it off' deviation really calls HA — lights allowed."""
+    result = await HaExecutor().apply(
+        {
+            "type": "deviation",
+            "domain": "light",
+            "service": "turn_off",
+            "entity_id": "light.hall",
+            "data": {},
+        }
+    )
+    assert result.status == "applied"
+    assert fake_ha.service_calls == [
+        ("/api/services/light/turn_off", {"entity_id": "light.hall"})
+    ]
+
+
+async def test_deviation_service_call_refused_outside_whitelist(fake_ha: FakeHa):
+    """Switches and cameras stay non-executable even as explicit calls."""
+    for action in (
+        {
+            "type": "deviation",
+            "domain": "switch",
+            "service": "turn_off",
+            "entity_id": "switch.pump",
+            "data": {},
+        },
+        {
+            "type": "deviation",
+            "domain": "camera",
+            "service": "turn_off",
+            "entity_id": "camera.porch",
+            "data": {},
+        },
+    ):
+        result = await HaExecutor().apply(action)
+        assert result.status == "refused"
+    assert fake_ha.calls == []
+
+
+async def test_setpoint_actions_still_use_setpoint_path(fake_ha: FakeHa):
+    """The generic-call branch must not swallow classic setpoint actions."""
+    result = await HaExecutor().apply(
+        {"type": "supervisor", "kind": "setpoint", "entity_id": "number.x", "value": 21}
+    )
+    assert result.status == "applied"
+    assert fake_ha.service_calls == [
+        ("/api/services/number/set_value", {"entity_id": "number.x", "value": 21.0})
+    ]

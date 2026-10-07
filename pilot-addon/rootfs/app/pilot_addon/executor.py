@@ -45,12 +45,32 @@ async def ha_set_value(
 ) -> None:
     """Write a number/input_number value through the HA Core API."""
     domain = entity_id.split(".", 1)[0]
-    url = f"{base_url or HA_API_BASE}/services/{domain}/set_value"
+    await ha_service_call(
+        session,
+        domain,
+        "set_value",
+        {"entity_id": entity_id, "value": value},
+        base_url=base_url,
+        token=token,
+    )
+
+
+async def ha_service_call(
+    session: aiohttp.ClientSession,
+    domain: str,
+    service: str,
+    data: dict[str, Any] | None = None,
+    *,
+    base_url: str | None = None,
+    token: str | None = None,
+) -> None:
+    """One HA Core API service call (Supervisor proxy); 200 only."""
+    url = f"{base_url or HA_API_BASE}/services/{domain}/{service}"
     auth = token if token is not None else os.environ.get("SUPERVISOR_TOKEN", "")
     headers = {"Authorization": f"Bearer {auth}"}
     async with session.post(
         url,
-        json={"entity_id": entity_id, "value": value},
+        json=data or {},
         headers=headers,
         timeout=REQUEST_TIMEOUT,
     ) as resp:
@@ -74,6 +94,8 @@ class HaExecutor:
         if action.get("kind") == "proposal":
             # Informational proposal: the owner's "yes" is the decision itself.
             return ExecResult("ack", {"title": str(action.get("title", ""))})
+        if self._looks_like_service_call(action):
+            return await self._service_call(action)
         target = self._resolve(action)
         if target is None:
             return ExecResult("refused", {"reason": "unsupported_action"})
@@ -92,6 +114,44 @@ class HaExecutor:
                 token=self._token,
             )
         return ExecResult("applied", {"entity_id": entity_id, "value": value})
+
+    @staticmethod
+    def _looks_like_service_call(action: dict[str, Any]) -> bool:
+        return (
+            isinstance(action.get("domain"), str)
+            and isinstance(action.get("service"), str)
+            and isinstance(action.get("entity_id"), str)
+            and "." in str(action.get("entity_id"))
+            and "kind" not in action
+        )
+
+    async def _service_call(self, action: dict[str, Any]) -> ExecResult:
+        """Execute an explicit service call — only when safety.classify agrees.
+
+        Deviation neutralisation ("the hall light has been on all night —
+        turn it off?") carries a concrete call; it may execute only inside
+        the reversible whitelist, same as everything else.
+        """
+        from .safety import classify
+
+        if classify(action) != "direct":
+            return ExecResult("refused", {"reason": "service_not_whitelisted"})
+        domain = str(action["domain"])
+        service = str(action["service"])
+        entity_id = str(action["entity_id"])
+        data = action.get("data")
+        payload = dict(data) if isinstance(data, dict) else {}
+        payload["entity_id"] = entity_id
+        async with aiohttp.ClientSession() as session:
+            await ha_service_call(
+                session,
+                domain,
+                service,
+                payload,
+                base_url=self._base_url,
+                token=self._token,
+            )
+        return ExecResult("applied", {"entity_id": entity_id, "service": service})
 
     @staticmethod
     def _resolve(action: dict[str, Any]) -> tuple[str, float] | None:

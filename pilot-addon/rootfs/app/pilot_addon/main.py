@@ -160,11 +160,12 @@ async def norm_loop(state: RuntimeState, interval_s: float = 1800) -> None:
     Runs every 30 minutes but the guards (home mode, decline history,
     one-proposal-a-day cap) keep the owner unsolicited most of the time.
     """
-    from .norms import propose_norms
+    from .norms import propose_deviations, propose_norms
 
     while True:
         try:
             propose_norms(state)
+            propose_deviations(state)
         except Exception:
             logger.exception("norm detection failed")  # soft degradation
         await asyncio.sleep(interval_s)

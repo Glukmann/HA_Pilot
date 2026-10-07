@@ -7,7 +7,7 @@ import time
 
 from pilot_addon.eventlog import EventLog
 from pilot_addon.main import build_state
-from pilot_addon.norms import detect_norms, propose_norms
+from pilot_addon.norms import detect_norms, propose_deviations, propose_norms
 
 NOW = time.mktime((2026, 10, 7, 12, 0, 0, 0, 0, -1))
 
@@ -225,3 +225,59 @@ def test_norms_csv_complete_for_supported_languages():
             k for k, cells in rows.items() if not (cells.get(language) or "").strip()
         ]
         assert missing == [], f"norms.csv: {language} misses {missing}"
+
+
+# -- deviations ---------------------------------------------------------------------
+
+
+def _flagged_state(tmp_path):
+    state = _furnished(tmp_path)
+    state.flags = ["light_always_on:light.hall", "sensor_dead:sensor.x"]
+    return state
+
+
+def test_deviation_flag_becomes_neutralise_proposal(tmp_path):
+    state = _flagged_state(tmp_path)
+    proposed = propose_deviations(state, NOW)
+    assert len(proposed) == 1
+    item = state.queue.items[0]
+    assert "горит всю ночь" in item.title
+    assert "Свет холл" in item.title
+    assert item.action == {
+        "type": "deviation",
+        "domain": "light",
+        "service": "turn_off",
+        "entity_id": "light.hall",
+        "data": {},
+    }
+    # Дедуп: тот же флаг снова — без новых предложений.
+    assert propose_deviations(state, NOW) == []
+    assert len(state.queue.items) == 1
+
+
+def test_gate_flag_neutralise_proposal(tmp_path):
+    state = _furnished(tmp_path)
+    state.vitrine.update(
+        {
+            "switch.gate": {
+                "state": "on",
+                "attrs": {"friendly_name": "Калитка"},
+                "area": "Двор",
+            }
+        }
+    )
+    state.flags = ["gate_stuck:switch.gate"]
+    proposed = propose_deviations(state, NOW)
+    assert len(proposed) == 1
+    assert "Калитка" in state.queue.items[0].title
+    assert state.queue.items[0].action["service"] == "turn_off"
+
+
+def test_deviation_daily_cap_and_mode_guard(tmp_path):
+    state = _flagged_state(tmp_path)
+    assert len(propose_deviations(state, NOW)) == 1
+    state.queue.items.clear()  # «другой день» той же ситуации
+    assert propose_deviations(state, NOW) == []  # кап на сегодня исчерпан
+    reborn = _flagged_state(tmp_path / "other")
+    reborn.set_mode("guests")
+    assert propose_deviations(reborn, NOW) == []

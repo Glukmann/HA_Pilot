@@ -39,7 +39,7 @@ function ConfigNode({ name, value }: { name: string; value: unknown }) {
 }
 
 interface ConfigSectionProps {
-  /** Section key inside config/get sections (channels/models/plugins). */
+  /** Section key inside config/get sections (e.g. channels, supervisor). */
   sectionKey: string;
   title: string;
   emptyHeadline: string;
@@ -126,12 +126,15 @@ export function ChannelsSection() {
 }
 
 export function ModelsSection() {
+  // The runtime stores provider/key/model in the supervisor section
+  // (written by the onboarding wizard); there is no separate "models"
+  // section yet — directions come later (Phase 6).
   return (
     <ConfigSection
-      sectionKey="models"
+      sectionKey="supervisor"
       title="Модели"
       emptyHeadline="Модели ещё не настроены."
-      emptyBody="Провайдеры, ключи API и выбор моделей по направлениям появятся здесь после онбординга рантайма."
+      emptyBody="Провайдер, ключ и модель появятся здесь после онбординга рантайма (раздел «Настройка»)."
     />
   );
 }

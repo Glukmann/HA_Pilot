@@ -41,6 +41,7 @@ from typing import Any
 
 import aiohttp
 
+from .modelstore import resolve_section
 from .state import RuntimeState
 
 logger = logging.getLogger("pilot.addon")
@@ -134,13 +135,19 @@ class SupervisorError(Exception):
 
 
 def load_supervisor_config(state: RuntimeState) -> dict[str, Any] | None:
-    """Return the supervisor config section, or None when unusable."""
+    """Return the supervisor config section, or None when unusable.
+
+    When model profiles exist, the active profile supplies base_url/api_key/
+    model/prices (modelstore.resolve_section); legacy top-level fields are
+    the fallback.
+    """
     raw = state.read_config()
     if raw is None:
         return None
     section = raw.get("supervisor")
     if not isinstance(section, dict):
         return None
+    section = resolve_section(section)
     missing = ("base_url", "api_key", "model")
     if not all(section.get(key) for key in missing):
         return None

@@ -33,6 +33,16 @@ Commands (client -> server), each answered with a frame of the same type:
     skills/get      {name}          -> payload: {name, description, content}
     skills/set      {name, content} -> payload: {ok: true, name}
     skills/reset    {name}          -> payload: {ok: true, name}
+    models/list                     -> payload: {items: [{id, label, base_url,
+                                       model, has_key, prices…}], active_id} —
+                                       api keys never leave the add-on
+    models/upsert   {id?, label?, base_url, api_key, model, prices?}
+                                    -> payload: {ok: true, id}; api_key "***"
+                                       keeps the stored key; id auto when absent
+    models/remove   {id}            -> payload: {ok: true}; the active profile
+                                       cannot be removed
+    models/activate {id}            -> payload: {ok: true, active_id} — the
+                                       daily supervisor run uses the active one
 
 Server -> client events:
     log    new record for log subscribers (after logs/subscribe)
@@ -60,6 +70,14 @@ from typing import Any
 from aiohttp import WSMsgType, web
 
 from .logbuffer import LogBuffer
+from .modelstore import (
+    ModelError,
+    active_id_of,
+    masked_items,
+    profiles_of,
+    upsert,
+    without,
+)
 from .promptstore import (
     PromptError,
     get_entry,
@@ -145,6 +163,9 @@ _STATUS_BROADCAST_COMMANDS = frozenset(
         "config/set",
         "prompts/set",
         "skills/set",
+        "models/upsert",
+        "models/remove",
+        "models/activate",
     }
 )
 
@@ -314,6 +335,72 @@ async def _cmd_config_set(
     return {"ok": True, "section": section}
 
 
+def _supervisor_section(state: RuntimeState) -> dict[str, Any]:
+    raw = state.read_config() or {}
+    section = raw.get("supervisor")
+    return dict(section) if isinstance(section, dict) else {}
+
+
+def _write_supervisor(state: RuntimeState, values: dict[str, Any]) -> None:
+    try:
+        state.write_config_section("supervisor", values)
+    except (OSError, ValueError) as err:
+        raise CommandError(f"config write failed: {err}") from err
+
+
+async def _cmd_models_list(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    section = _supervisor_section(session.state)
+    return {
+        "items": masked_items(section),
+        "active_id": active_id_of(section),
+    }
+
+
+async def _cmd_models_upsert(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    section = _supervisor_section(session.state)
+    try:
+        models, profile_id = upsert(section, payload)
+    except ModelError as err:
+        raise CommandError(str(err)) from err
+    _write_supervisor(session.state, {"models": models})
+    # Audit and logs carry the id only — never keys or endpoints.
+    session.state.queue._audit.record("models.upsert", {"id": profile_id})
+    logger.info("models.upsert id=%s", profile_id)
+    return {"ok": True, "id": profile_id}
+
+
+async def _cmd_models_remove(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    profile_id = str(payload.get("id") or "")
+    section = _supervisor_section(session.state)
+    try:
+        models = without(section, profile_id)
+    except ModelError as err:
+        raise CommandError(str(err)) from err
+    _write_supervisor(session.state, {"models": models})
+    session.state.queue._audit.record("models.remove", {"id": profile_id})
+    logger.info("models.remove id=%s", profile_id)
+    return {"ok": True}
+
+
+async def _cmd_models_activate(
+    session: WsSession, payload: dict[str, Any]
+) -> dict[str, Any]:
+    profile_id = str(payload.get("id") or "")
+    section = _supervisor_section(session.state)
+    if not any(p["id"] == profile_id for p in profiles_of(section)):
+        raise CommandError(f"unknown model: {profile_id}")
+    _write_supervisor(session.state, {"active_id": profile_id})
+    session.state.queue._audit.record("models.activate", {"id": profile_id})
+    logger.info("models.activate id=%s", profile_id)
+    return {"ok": True, "active_id": profile_id}
+
+
 def _get_named(state: RuntimeState, kind: str, name: Any) -> dict[str, Any]:
     """Shared get for prompts/skills; CommandError on bad or unknown names."""
     try:
@@ -428,6 +515,10 @@ def _registry() -> dict[str, CommandHandler]:
         "skills/get": _cmd_skills_get,
         "skills/set": _cmd_skills_set,
         "skills/reset": _cmd_skills_reset,
+        "models/list": _cmd_models_list,
+        "models/upsert": _cmd_models_upsert,
+        "models/remove": _cmd_models_remove,
+        "models/activate": _cmd_models_activate,
     }
 
 

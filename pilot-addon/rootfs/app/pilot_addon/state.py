@@ -13,6 +13,8 @@ from pathlib import Path
 import time
 from typing import Any
 
+from .modelstore import resolve_section
+
 PERSONA_SLIDERS = (
     "butler_observer",
     "politeness",
@@ -113,7 +115,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.9.3"
+        self.runtime_version = "0.10.0"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -183,16 +185,18 @@ class RuntimeState:
         tmp.replace(self.config_path)
 
     def is_onboarded(self) -> bool:
-        """True when the supervisor section has base_url + api_key + model.
+        """True when the resolved supervisor config has base_url+api_key+model.
 
         The wizard finishes by writing that section, so the flag rises on
-        its own; a missing or broken config means "not onboarded".
+        its own; with model profiles the active one counts (modelstore).
+        A missing or broken config means "not onboarded".
         """
         raw = self.read_config() or {}
         supervisor = raw.get("supervisor")
         if not isinstance(supervisor, dict):
             return False
-        return all(supervisor.get(key) for key in ("base_url", "api_key", "model"))
+        resolved = resolve_section(supervisor)
+        return all(resolved.get(key) for key in ("base_url", "api_key", "model"))
 
     def set_persona(self, slider: str, value: int) -> None:
         if slider not in PERSONA_SLIDERS:

@@ -124,17 +124,3 @@ export function ChannelsSection() {
     />
   );
 }
-
-export function ModelsSection() {
-  // The runtime stores provider/key/model in the supervisor section
-  // (written by the onboarding wizard); there is no separate "models"
-  // section yet — directions come later (Phase 6).
-  return (
-    <ConfigSection
-      sectionKey="supervisor"
-      title="Модели"
-      emptyHeadline="Модели ещё не настроены."
-      emptyBody="Провайдер, ключ и модель появятся здесь после онбординга рантайма (раздел «Настройка»)."
-    />
-  );
-}

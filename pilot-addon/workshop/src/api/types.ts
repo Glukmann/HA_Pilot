@@ -116,3 +116,27 @@ export interface AssetAckPayload {
   name: string;
 }
 
+/** One model profile as listed by models/list (api_key never leaves). */
+export interface ModelProfile {
+  id: string;
+  label: string;
+  base_url: string;
+  model: string;
+  /** True when a key is stored; the value itself is never exposed. */
+  has_key: boolean;
+  price_input_per_1m: number | null;
+  price_output_per_1m: number | null;
+}
+
+export interface ModelsPayload {
+  items: ModelProfile[];
+  active_id: string | null;
+}
+
+/** Ack payload of models/upsert and models/activate. */
+export interface ModelAckPayload {
+  ok: boolean;
+  id?: string;
+  active_id?: string;
+}
+

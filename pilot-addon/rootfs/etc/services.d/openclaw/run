@@ -1,0 +1,14 @@
+#!/usr/bin/with-contenv bashio
+set -e
+
+export OPENCLAW_STATE_DIR="/data/openclaw"
+export NODE_ENV="production"
+export PYTHONPATH="/app"
+
+# First boot: seed the core config (idempotent; never overwrites edits).
+if [ ! -f /data/openclaw/openclaw.json ]; then
+    bashio::log.info "Seeding OpenClaw core config..."
+    python3 -m pilot_addon.corecfg
+fi
+
+exec node /opt/openclaw/openclaw.mjs gateway

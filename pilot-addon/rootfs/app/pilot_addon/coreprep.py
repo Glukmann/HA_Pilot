@@ -44,7 +44,21 @@ def main() -> int:
 
     applied = asyncio.run(coresync.ensure_runtime_config(state))
     logger.info("runtime config: %s", ", ".join(applied) or "already converged")
-    logger.info("build marker: coreprep-0194")  # deploy-pipeline canary
+    logger.info("build marker: coreprep-0195")  # deploy-pipeline canary
+
+    # Ground-truth resolution diagnostics (no secrets) — independent of
+    # whatever coresync build ships in this image.
+    from .modelstore import resolve_section
+
+    resolved = resolve_section(section if isinstance(section, dict) else {})
+    first_keys = sorted(profiles[0].keys()) if profiles else []
+    logger.info(
+        "profile resolution: base_url=%s model=%s api_key=%s | first profile keys=%s",
+        bool(resolved.get("base_url")),
+        resolved.get("model") or "<empty>",
+        bool(resolved.get("api_key")),
+        first_keys,
+    )
     model_synced = asyncio.run(coresync.sync_model(state))
     logger.info(
         "model sync: %s", "applied" if model_synced else "no active profile (skipped)"

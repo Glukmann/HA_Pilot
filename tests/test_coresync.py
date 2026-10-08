@@ -59,7 +59,7 @@ async def test_sync_model_writes_provider_and_default(tmp_path, monkeypatch):
     provider = json.loads(provider_call[1])
     assert provider["baseUrl"] == "https://llm.example/v1"
     assert provider["apiKey"] == "k"
-    assert provider["models"] == [{"id": "deepseek-chat"}]
+    assert provider["models"] == [{"id": "deepseek-chat", "name": "deepseek-chat"}]
     default_call = next(c for c in calls if c[0] == "agents.defaults.model")
     assert default_call[1] == '"pilot/deepseek-chat"'
 

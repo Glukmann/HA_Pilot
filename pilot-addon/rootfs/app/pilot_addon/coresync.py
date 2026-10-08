@@ -139,7 +139,8 @@ async def sync_model(state: Any) -> bool:
         "baseUrl": base_url,
         "apiKey": str(profile.get("api_key") or ""),
         "api": "openai-completions",
-        "models": [{"id": model}],
+        # The core's provider schema requires a string `name` per model.
+        "models": [{"id": model, "name": model}],
     }
     # No --merge: the add-on owns providers.pilot wholesale, and the core
     # refuses list/object merges on existing keys ("use --replace").

@@ -223,8 +223,9 @@ def create_app(
             try:
                 result = await executor.apply(action_payload)
             except Exception as err:  # HA down — offer a retry via the queue
+                target = action_payload.get("entity_id") or domain
                 state.queue.propose(
-                    title=f"⚠️ Не исполнено: {action_payload.get('entity_id') or domain}",
+                    title=f"⚠️ Не исполнено: {target}",
                     summary=f"Ошибка HA: {err}. Подтвердите повторно.",
                     action={**action_payload, "retry": True},
                 )
@@ -237,9 +238,10 @@ def create_app(
             return web.json_response(
                 {"status": result.status, "detail": str(result.detail)[:500]}
             )
+        summary_target = action_payload.get("entity_id") or "дома"
         item_id = state.queue.propose(
             title=f"Действие агента: {domain}.{service}",
-            summary=f"Запрошено агентом для {action_payload.get('entity_id') or 'дома'}",
+            summary=f"Запрошено агентом для {summary_target}",
             action=action_payload,
         )
         return web.json_response(

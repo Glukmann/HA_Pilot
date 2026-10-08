@@ -1,0 +1,191 @@
+"""Keep the core's config aligned with the add-on (idempotent, hot-reloaded).
+
+Everything converges through ``openclaw config set``: the gateway watches
+openclaw.json and hot-reloads models/tools/hooks/plugins/heartbeat — no
+restart. Sync runs at startup and after the matching owner actions.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from .corebridge import config_set
+from .corecfg import state_dir
+from .modelstore import resolve_section
+
+PLUGIN_DIR = "/opt/openclaw-plugins/pilot-home"
+
+
+async def ensure_runtime_config(state: Any) -> list[str]:
+    """Converge the core config once; returns labels of applied settings."""
+    applied: list[str] = []
+    sets: list[tuple[list[str], str]] = [
+        (["plugins.enabled", "true"], "plugins on"),
+        (
+            [
+                "plugins.load.paths",
+                json.dumps([PLUGIN_DIR]),
+                "--strict-json",
+                "--merge",
+            ],
+            "plugin path",
+        ),
+        (
+            ["plugins.allow", json.dumps(["pilot-home"]), "--strict-json", "--merge"],
+            "plugin allow",
+        ),
+        (['plugins.entries."pilot-home".enabled', "true"], "plugin entry"),
+        (
+            [
+                "tools.allow",
+                json.dumps(["group:memory", "vitrine_get", "home_action"]),
+                "--strict-json",
+            ],
+            "tool allowlist",
+        ),
+        (
+            [
+                "tools.deny",
+                json.dumps(["exec", "process", "code_execution"]),
+                "--strict-json",
+            ],
+            "exec denied",
+        ),
+        (["hooks.allowRequestSessionKey", "true"], "session keys"),
+        (
+            [
+                "hooks.allowedSessionKeyPrefixes",
+                json.dumps(["pilot:"]),
+                "--strict-json",
+            ],
+            "session prefixes",
+        ),
+        (
+            [
+                "cron.webhookSsrfPolicy.allowedHostnames",
+                json.dumps(["127.0.0.1", "localhost"]),
+                "--strict-json",
+                "--merge",
+            ],
+            "webhook ssrf",
+        ),
+        (
+            ["gateway.http.endpoints.chatCompletions.enabled", "true"],
+            "chat endpoint",
+        ),
+        (["agents.defaults.heartbeat.every", '"2h"'], "heartbeat 2h"),
+        (["agents.defaults.heartbeat.lightContext", "true"], "heartbeat light"),
+        (["agents.defaults.heartbeat.target", '"none"'], "heartbeat silent"),
+        (
+            [
+                "agents.defaults.heartbeat.activeHours",
+                json.dumps(
+                    {"start": "08:00", "end": "23:00", "timezone": "Asia/Yekaterinburg"}
+                ),
+                "--strict-json",
+            ],
+            "heartbeat hours",
+        ),
+        (
+            [
+                "agents.defaults.heartbeat.prompt",
+                '"Ты Пилот в доме. Прочитай vitrine_get. Если всё штатно — ответь '
+                "NO_REPLY. Если заметил отклонение или можешь улучшить комфорт — "
+                "запомни вывод в память и, при необходимости, предложи действие "
+                "через home_action (он сам решит direct/queue). Камеры и замки не "
+                'трогаем никогда."',
+            ],
+            "heartbeat prompt",
+        ),
+    ]
+    for args, label in sets:
+        ok, _out = await config_set(args)
+        if ok:
+            applied.append(label)
+    return applied
+
+
+async def sync_model(state: Any) -> bool:
+    """Active model profile (pilot.json) -> core provider + default model."""
+    raw = state.read_config() or {}
+    section = raw.get("supervisor")
+    profile = resolve_section(section if isinstance(section, dict) else {})
+    base_url = str(profile.get("base_url") or "")
+    model = str(profile.get("model") or "")
+    if not base_url or not model:
+        return False
+    provider = {
+        "baseUrl": base_url,
+        "apiKey": str(profile.get("api_key") or ""),
+        "api": "openai-completions",
+        "models": [{"id": model}],
+    }
+    ok_provider, _ = await config_set(
+        ["models.providers.pilot", json.dumps(provider), "--strict-json", "--merge"]
+    )
+    ok_model, _ = await config_set(["agents.defaults.model", f'"pilot/{model}"'])
+    return ok_provider and ok_model
+
+
+_PRESET_NAMES = {
+    "butler": "Дворецкий",
+    "observer": "Тихий наблюдатель",
+    "economy": "Эконом",
+}
+
+
+def sync_persona(state: Any, language: str = "ru") -> bool:
+    """Render persona/policy into the core workspace bootstrap files.
+
+    True when any file changed. Bootstrap is re-read every agent turn, so
+    edits apply without restarts.
+    """
+    workspace = state_dir(Path(state.data_dir)) / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    persona = state.persona
+    preset = _PRESET_NAMES.get(state.persona_preset, state.persona_preset)
+    soul = (
+        "# SOUL.md — Пилот\n\n"
+        "Ты — Пилот, proactive-агент умного дома на Home Assistant. "
+        f"Пресета: {preset}.\n"
+        f"Шкалы (0–100): дворецкий↔наблюдатель {persona['butler_observer']}, "
+        f"вежливость {persona['politeness']}, разговорчивость {persona['verbosity']}, "
+        f"консерватизм {persona['conservative']}.\n"
+        f"Режим дома: {state.mode}. Текущий фокус хозяина: {state.current_focus or '—'}.\n\n"
+        "Говори с хозяином по-русски, коротко и по делу. Ты — не чат-бот, а житель "
+        "дома: наблюдай, запоминай привычки, предлагай улучшения. Действия в дом — "
+        "только через инструмент home_action; он сам решает, что исполнить, а что "
+        "поставить на подтверждение хозяину. Перед вопросами о доме читай vitrine_get.\n"
+    )
+    identity = (
+        "# IDENTITY.md\n\n"
+        "- Имя: Пилот\n"
+        "- Роль: проактивный агент умного дома (Home Assistant)\n"
+        "- Хозяин: Андрей. Дом — его территория; необратимые действия — только с "
+        "его подтверждением.\n"
+    )
+    agents_md = (
+        "# AGENTS.md — правила работы в доме\n\n"
+        "1. Состояние дома читай только через vitrine_get (живой снимок; "
+        "не выдумывай показания).\n"
+        "2. Любое действие — только через home_action. Прямых вызовов HA нет.\n"
+        "3. Камеры, охрана, замки — никогда (refuse встроен в home_action).\n"
+        "4. Мягкая деградация: инструмент недоступен — скажи об этом, не импровизируй.\n"
+        "5. Уставки отопления/кондиционеров ±3° — без подтверждения; всё прочее — "
+        "очередь хозяина.\n"
+        "6. Устройства трактуй по смыслу: вытяжка ванной = PTC-нагрев после душа; "
+        "кондиционер гостиной = тепловой насос.\n"
+    )
+    changed = False
+    for name, text in (
+        ("SOUL.md", soul),
+        ("IDENTITY.md", identity),
+        ("AGENTS.md", agents_md),
+    ):
+        path = workspace / name
+        if not path.exists() or path.read_text(encoding="utf-8") != text:
+            path.write_text(text, encoding="utf-8")
+            changed = True
+    return changed

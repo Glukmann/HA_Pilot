@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import aiohttp
 from aiohttp import web
-
 from pilot_addon.executor import ExecResult
 from pilot_addon.http_api import create_app
 from pilot_addon.main import build_state
@@ -20,7 +19,9 @@ class _FakeExecutor:
         self.calls.append(action)
         if "fail" in str(action.get("entity_id")):
             raise RuntimeError("ha down")
-        return ExecResult(status="applied", detail={"entity_id": action.get("entity_id")})
+        return ExecResult(
+            status="applied", detail={"entity_id": action.get("entity_id")}
+        )
 
 
 async def _start(tmp_path, socket_enabled):
@@ -47,7 +48,8 @@ async def test_action_direct_applies(tmp_path, socket_enabled):
     state, executor, port, runner = await _start(tmp_path, socket_enabled)
     try:
         status, body = await _post(
-            port, {"domain": "light", "service": "turn_on", "entity_id": "light.kabinet"}
+            port,
+            {"domain": "light", "service": "turn_on", "entity_id": "light.kabinet"},
         )
         assert status == 200
         assert body["status"] == "applied"
@@ -61,7 +63,8 @@ async def test_action_refuse_never_executes(tmp_path, socket_enabled):
     state, executor, port, runner = await _start(tmp_path, socket_enabled)
     try:
         status, body = await _post(
-            port, {"domain": "camera", "service": "turn_on", "entity_id": "camera.porch"}
+            port,
+            {"domain": "camera", "service": "turn_on", "entity_id": "camera.porch"},
         )
         assert status == 200
         assert body["status"] == "refused"
@@ -86,7 +89,7 @@ async def test_action_queue_for_non_whitelisted(tmp_path, socket_enabled):
 
 
 async def test_action_ha_error_requeues(tmp_path, socket_enabled):
-    state, executor, port, runner = await _start(tmp_path, socket_enabled)
+    state, _executor, port, runner = await _start(tmp_path, socket_enabled)
     try:
         status, body = await _post(
             port, {"domain": "light", "service": "turn_on", "entity_id": "light.fail"}

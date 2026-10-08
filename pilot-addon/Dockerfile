@@ -86,6 +86,13 @@ RUN set -eux; \
     cp -rL /opt/openclaw/node_modules/typebox /opt/openclaw-plugins/pilot-home/node_modules/; \
     node -e "import('/opt/openclaw-plugins/pilot-home/dist/index.js').then((m)=>{if(!m.default||m.default.id!=='pilot-home')process.exit(1)})"
 
+# The `openclaw` CLI on PATH: the add-on's core bridge drives the gateway
+# config through it (`openclaw config set`, `openclaw automations`).
+RUN printf '#!/bin/sh\nexec node /opt/openclaw/openclaw.mjs "$@"\n' \
+        > /usr/local/bin/openclaw \
+    && chmod +x /usr/local/bin/openclaw \
+    && openclaw --version
+
 WORKDIR /app
 COPY --from=ctx /ctx/addon-rootfs/app /app
 # Committed workshop dist next to the package; workshop_static.py serves it at /.

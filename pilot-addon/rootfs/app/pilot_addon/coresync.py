@@ -28,12 +28,11 @@ async def ensure_runtime_config(state: Any) -> list[str]:
                 "plugins.load.paths",
                 json.dumps([PLUGIN_DIR]),
                 "--strict-json",
-                "--merge",
             ],
             "plugin path",
         ),
         (
-            ["plugins.allow", json.dumps(["pilot-home"]), "--strict-json", "--merge"],
+            ["plugins.allow", json.dumps(["pilot-home"]), "--strict-json"],
             "plugin allow",
         ),
         (['plugins.entries."pilot-home".enabled', "true"], "plugin entry"),
@@ -57,7 +56,8 @@ async def ensure_runtime_config(state: Any) -> list[str]:
         (
             [
                 "hooks.allowedSessionKeyPrefixes",
-                json.dumps(["pilot:"]),
+                # The core requires its own "hook:" prefix in the list.
+                json.dumps(["hook:", "pilot:"]),
                 "--strict-json",
             ],
             "session prefixes",
@@ -67,7 +67,6 @@ async def ensure_runtime_config(state: Any) -> list[str]:
                 "cron.webhookSsrfPolicy.allowedHostnames",
                 json.dumps(["127.0.0.1", "localhost"]),
                 "--strict-json",
-                "--merge",
             ],
             "webhook ssrf",
         ),

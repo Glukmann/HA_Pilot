@@ -84,6 +84,10 @@ async def ensure_runtime_config(state: Any) -> list[str]:
             ["gateway.http.endpoints.chatCompletions.enabled", "true"],
             "chat endpoint",
         ),
+        (
+            ['memory.search.provider', '"none"'],
+            "memory fts",
+        ),
         (["agents.defaults.heartbeat.every", '"2h"'], "heartbeat 2h"),
         (["agents.defaults.heartbeat.lightContext", "true"], "heartbeat light"),
         (["agents.defaults.heartbeat.target", '"none"'], "heartbeat silent"),

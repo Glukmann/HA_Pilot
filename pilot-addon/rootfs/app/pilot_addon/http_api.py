@@ -314,8 +314,10 @@ def create_app(
         except ValueError:
             hours = 24.0
         start = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+        from urllib.parse import quote
+
         status, raw = await ha_get(
-            f"/api/history/period/{start}",
+            f"/api/history/period/{quote(start, safe='')}",
             params={"filter_entity_id": eid, "minimal_response": ""},
         )
         if status != 200:

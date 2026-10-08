@@ -358,6 +358,11 @@ def create_app(
             },
         )
         if status != 200:
+            logging.getLogger("pilot.addon").warning(
+                "core.query failed: tool=home_history entity=%s ha_status=%s",
+                eid,
+                status,
+            )
             return web.json_response({"error": f"ha http {status}"}, status=502)
         return web.json_response({"entity_id": eid, **compact_history(raw, hours)})
 

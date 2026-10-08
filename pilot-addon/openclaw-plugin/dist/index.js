@@ -34,6 +34,22 @@ export default defineToolPlugin({
             },
         }),
         tool({
+            name: "home_find",
+            description: "Найти entity_id по названию или части имени (поиск по снимку дома). " +
+                "Используй ПЕРЕД home_state/home_history, чтобы не угадывать id.",
+            parameters: Type.Object({
+                q: Type.String({ description: "подстрока: 'гостиная темп', 'кондиционер'…" }),
+            }),
+            async execute(params) {
+                try {
+                    return await getText(`/api/entity-find?q=${encodeURIComponent(params.q)}`);
+                }
+                catch (err) {
+                    return `home_find unavailable: ${String(err).slice(0, 200)}`;
+                }
+            },
+        }),
+        tool({
             name: "home_state",
             description: "Свежее значение ОДНОЙ сущности напрямую из HA (state, атрибуты, " +
                 "last_changed). Используй, когда витрины не хватает или нужна точность.",

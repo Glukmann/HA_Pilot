@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.2
+
+- **Tool `home_find(q)`** — поиск entity_id по подстроке названия (по снимку
+  витрины, 0 токенов): агент больше не угадывает id вроде
+  `sensor.komnatnyy_konditsioner_temperatura`.
+- **Видимость read-контура**: каждый запрос state/history/statistics пишется
+  в аудит (`core.query` с ha_status); 404 от HA проходит агенту как 404 —
+  он может попробовать другой id, а не получать безликий 502.
+
 ## 0.20.1
 
 - **Фикс `home_history`**: ISO-timestamp периода теперь URL-encoded (`+`/`:`)

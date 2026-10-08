@@ -42,6 +42,7 @@ async def ensure_runtime_config(state: Any) -> list[str]:
                 json.dumps(
                     [
                         "vitrine_get",
+                        "home_find",
                         "home_state",
                         "home_history",
                         "home_statistics",
@@ -85,7 +86,7 @@ async def ensure_runtime_config(state: Any) -> list[str]:
             "chat endpoint",
         ),
         (
-            ['memory.search.provider', '"none"'],
+            ["memory.search.provider", '"none"'],
             "memory fts",
         ),
         (["agents.defaults.heartbeat.every", '"2h"'], "heartbeat 2h"),

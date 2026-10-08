@@ -286,6 +286,11 @@ def create_app(
         if eid is None:
             return web.json_response({"error": "bad entity_id"}, status=400)
         status, data = await ha_get(f"/api/states/{eid}")
+        state.queue._audit.record(
+            "core.query", {"tool": "home_state", "entity_id": eid, "ha_status": status}
+        )
+        if status == 404:
+            return web.json_response({"error": "entity not found"}, status=404)
         if status != 200 or not isinstance(data, dict):
             return web.json_response({"error": f"ha http {status}"}, status=502)
         return web.json_response(
@@ -297,6 +302,29 @@ def create_app(
                 "last_updated": data.get("last_updated"),
             }
         )
+
+    async def entity_find(request: web.Request) -> web.Response:
+        """Find entities by name/entity_id substring (vitrine, read-only)."""
+        query = str(request.query.get("q") or "").strip().lower()
+        if len(query) < 2:
+            return web.json_response({"error": "q too short"}, status=400)
+        matches = []
+        for eid, sample in sorted(state.vitrine.states.items()):
+            if not isinstance(sample, dict):
+                continue
+            name = str(sample.get("attrs", {}).get("friendly_name") or eid)
+            if query in eid.lower() or query in name.lower():
+                matches.append(
+                    {
+                        "entity_id": eid,
+                        "name": name,
+                        "state": sample.get("state"),
+                        "area": sample.get("area"),
+                    }
+                )
+            if len(matches) >= 10:
+                break
+        return web.json_response({"q": query, "matches": matches})
 
     async def entity_history(request: web.Request) -> web.Response:
         """Change history: turn-on times, trends (read-only)."""
@@ -319,6 +347,15 @@ def create_app(
         status, raw = await ha_get(
             f"/api/history/period/{quote(start, safe='')}",
             params={"filter_entity_id": eid, "minimal_response": ""},
+        )
+        state.queue._audit.record(
+            "core.query",
+            {
+                "tool": "home_history",
+                "entity_id": eid,
+                "hours": hours,
+                "ha_status": status,
+            },
         )
         if status != 200:
             return web.json_response({"error": f"ha http {status}"}, status=502)
@@ -350,6 +387,15 @@ def create_app(
                 "statistic_ids": [eid],
                 "period": period,
                 "types": ["state", "sum", "mean", "min", "max"],
+            },
+        )
+        state.queue._audit.record(
+            "core.query",
+            {
+                "tool": "home_statistics",
+                "entity_id": eid,
+                "hours": hours,
+                "ha_status": status,
             },
         )
         if status != 200 or not isinstance(raw, list) or not raw:
@@ -435,6 +481,7 @@ def create_app(
     app.router.add_post("/api/action", action)
     app.router.add_post("/api/core-run", core_run)
     app.router.add_get("/api/entity-state", entity_state)
+    app.router.add_get("/api/entity-find", entity_find)
     app.router.add_get("/api/entity-history", entity_history)
     app.router.add_get("/api/entity-statistics", entity_statistics)
     app.router.add_get("/api/vitrine", vitrine)

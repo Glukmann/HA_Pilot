@@ -31,8 +31,8 @@ async def _fake_ha(socket_enabled, monkeypatch, routes: dict):
     return server
 
 
-async def _start_addon(tmp_path):
-    state = build_state(tmp_path)
+async def _start_addon(tmp_path, state=None):
+    state = state or build_state(tmp_path)
     app = create_app(state)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -174,3 +174,59 @@ def test_compact_history_numeric_guard():
     assert out["summary"] is None
     assert out["points"] == [["t1", "on"], ["t2", "off"]]
     assert compact_history([], 24)["points"] == []
+
+
+async def test_entity_find_searches_vitrine(tmp_path, socket_enabled):
+    state = build_state(tmp_path)
+    state.push_vitrine(
+        {
+            "sensor.gostinaia_temperature": {
+                "state": "26.3",
+                "attrs": {"friendly_name": "Гостиная Температура"},
+                "area": "Гостиная",
+            },
+            "climate.gostinaia_kond": {
+                "state": "cooling",
+                "attrs": {"friendly_name": "Гостиная Кондиционер"},
+                "area": "Гостиная",
+            },
+            "light.hall": {
+                "state": "on",
+                "attrs": {"friendly_name": "Холл"},
+            },
+        }
+    )
+    port, runner = await _start_addon(tmp_path, state)
+    try:
+        status, body = await _get(
+            port, "/api/entity-find?q=%D0%B3%D0%BE%D1%81%D1%82%D0%B8%D0%BD%D0%B0%D1%8F"
+        )
+        assert status == 200
+        ids = [m["entity_id"] for m in body["matches"]]
+        assert "sensor.gostinaia_temperature" in ids
+        assert "climate.gostinaia_kond" in ids
+        assert "light.hall" not in ids
+        status, _ = await _get(port, "/api/entity-find?q=x")
+        assert status == 400
+    finally:
+        await runner.cleanup()
+
+
+async def test_entity_state_404_mapping(tmp_path, socket_enabled, monkeypatch):
+    async def not_found(request: web.Request) -> web.Response:
+        return web.json_response({"message": "not found"}, status=404)
+
+    app = web.Application()
+    app.router.add_route("*", "/{tail:.*}", not_found)
+    server = TestServer(app)
+    await server.start_server()
+    monkeypatch.setenv("HA_API_BASE", str(server.make_url("")))
+    monkeypatch.setenv("SUPERVISOR_TOKEN", "tok")
+
+    port, runner = await _start_addon(tmp_path)
+    try:
+        status, _body = await _get(port, "/api/entity-state?entity_id=sensor.absent")
+        assert status == 404
+    finally:
+        await runner.cleanup()
+        await server.close()

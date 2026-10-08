@@ -6,7 +6,6 @@ import json
 
 import aiohttp
 from aiohttp import web
-
 from pilot_addon import corebridge, coresync
 from pilot_addon.http_api import create_app
 from pilot_addon.main import build_state

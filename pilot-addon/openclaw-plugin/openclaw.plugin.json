@@ -1,0 +1,20 @@
+{
+  "id": "pilot-home",
+  "name": "Pilot Home",
+  "description": "Eyes and hands of the Pilot agent in the Home Assistant home: the vitrine snapshot and trust-guarded actions.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "vitrine_get",
+      "home_action"
+    ]
+  }
+}

@@ -43,15 +43,22 @@ def _auth_ok(request: web.Request, state: RuntimeState) -> bool:
 
 
 def create_app(
-    state: RuntimeState, workshop_dir: Path | None = None
+    state: RuntimeState, workshop_dir: Path | None = None, executor: Any = None
 ) -> web.Application:
     """Build the aiohttp application serving the contract.
 
     workshop_dir overrides the workshop SPA dist location (tests, local
     dev); the default is the workshop_dist dir baked into the image.
+    executor overrides the HA executor (tests); the core's tool plugin is
+    the default caller of /api/action.
     """
     app = web.Application()
     app["state"] = state
+    if executor is None:
+        from .executor import HaExecutor
+
+        executor = HaExecutor()
+    app["executor"] = executor
 
     log_buffer = LogBuffer()
     app["log_buffer"] = log_buffer
@@ -170,6 +177,75 @@ def create_app(
         )
         return web.json_response(result)
 
+    async def action(request: web.Request) -> web.Response:
+        """The core tool plugin's door into the home (trust-guarded).
+
+        safety.classify decides: direct -> execute now, queue -> trust
+        queue for the owner, refuse -> never. Never raises.
+        """
+        from .safety import classify
+
+        state: RuntimeState = request.app["state"]
+        executor = request.app["executor"]
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response(
+                {"status": "refused", "detail": "bad json"}, status=400
+            )
+        domain = str(body.get("domain") or "").strip()
+        service = str(body.get("service") or "").strip()
+        if not domain or not service:
+            return web.json_response(
+                {"status": "refused", "detail": "domain and service required"},
+                status=400,
+            )
+        action_payload: dict[str, Any] = {
+            "type": "service_call",
+            "domain": domain,
+            "service": service,
+        }
+        if body.get("entity_id"):
+            action_payload["entity_id"] = str(body["entity_id"])
+        if body.get("value") is not None:
+            action_payload["value"] = body["value"]
+
+        verdict = classify(action_payload)
+        if verdict == "refuse":
+            state.queue._audit.record("core.action.refused", {"action": action_payload})
+            return web.json_response(
+                {
+                    "status": "refused",
+                    "detail": "policy: this action is never executed",
+                }
+            )
+        if verdict == "direct":
+            try:
+                result = await executor.apply(action_payload)
+            except Exception as err:  # HA down — offer a retry via the queue
+                state.queue.propose(
+                    title=f"⚠️ Не исполнено: {action_payload.get('entity_id') or domain}",
+                    summary=f"Ошибка HA: {err}. Подтвердите повторно.",
+                    action={**action_payload, "retry": True},
+                )
+                return web.json_response(
+                    {"status": "queued", "detail": "ha error, re-queued"}
+                )
+            state.queue._audit.record(
+                f"core.action.{result.status}", {"action": action_payload}
+            )
+            return web.json_response(
+                {"status": result.status, "detail": str(result.detail)[:500]}
+            )
+        item_id = state.queue.propose(
+            title=f"Действие агента: {domain}.{service}",
+            summary=f"Запрошено агентом для {action_payload.get('entity_id') or 'дома'}",
+            action=action_payload,
+        )
+        return web.json_response(
+            {"status": "queued", "detail": f"queued for owner confirmation ({item_id})"}
+        )
+
     async def vitrine(request: web.Request) -> web.Response:
         return web.json_response(state.vitrine.as_dict())
 
@@ -194,6 +270,7 @@ def create_app(
     app.router.add_post("/api/queue", queue_propose)
     app.router.add_post("/api/queue/confirm", queue_confirm)
     app.router.add_post("/api/chat", chat)
+    app.router.add_post("/api/action", action)
     app.router.add_get("/api/vitrine", vitrine)
     app.router.add_post("/api/vitrine/update", vitrine_update)
     # Catch-all last: the SPA route matches every GET, so the contract

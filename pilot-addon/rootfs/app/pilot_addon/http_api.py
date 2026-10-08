@@ -462,10 +462,17 @@ def create_app(
         )
         if text and run_status == "ok":
             # The digest is the owner-facing text — keep it whole (the UI
-            # wraps; queue storage has no practical field limit).
+            # wraps; queue storage has no practical field limit). A footer
+            # makes the nature of the item explicit: observations, no action.
             state.queue.propose(
                 title="Вечерний обход Пилота",
-                summary=text[:3500],
+                summary=(
+                    text[:3500]
+                    + "\n\n— Сводка наблюдений: «да» просто закроет её, "
+                    "действий в доме не выполняется. Если внутри есть "
+                    "конкретное предложение — скажите, оформлю отдельным "
+                    "пунктом очереди."
+                ),
                 action={"kind": "proposal", "title": text[:300]},
             )
         return web.json_response({"ok": True})

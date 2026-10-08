@@ -139,6 +139,10 @@ def test_norm_becomes_queue_proposal(tmp_path):
         "entity_id": "light.hall",
         "time": item.action["time"],
     }
+    # Суть предложения явна: рецепт автоматизации и последствия да/нет.
+    assert "триггер — время" in item.summary
+    assert "light.turn_on(light.hall)" in item.summary
+    assert "«Да»" in item.summary and "«Нет»" in item.summary
     # Дедуп: повторный прогон не плодит копии.
     assert propose_norms(state, NOW) == []
     assert len(state.queue.items) == 1

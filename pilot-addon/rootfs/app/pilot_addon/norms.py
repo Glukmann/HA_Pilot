@@ -277,11 +277,17 @@ def propose_norms(
         # Dedup: an unanswered identical norm stays one queue item.
         if any(item.action == action for item in state.queue.items):
             continue
+        domain = eid.split(".", 1)[0]
+        service = "turn_on" if candidate["kind"] == "schedule_on" else "turn_off"
         item_id = state.queue.propose(
             title=title,
             summary=(
-                f"{candidate['occurrences']} включений/выключений за "
-                f"{candidate['window']} дней, разброс ±20 мин"
+                f"Замечено: {candidate['occurrences']} раз за "
+                f"{candidate['window']} дней (разброс ±20 мин).\n"
+                f"Предлагаемая автоматизация HA: триггер — время "
+                f"{candidate['time']}, действие — {domain}.{service}({eid}).\n"
+                f"«Да» — принять норму (автоматизацию оформим следующим "
+                f"шагом); «Нет» — больше не предлагаю."
             ),
             action=action,
         )
@@ -357,7 +363,12 @@ def propose_deviations(
         title = _norm_text(key, language).format(name=_entity_name(state, eid))
         item_id = state.queue.propose(
             title=title,
-            summary="Отклонение от обычного поведения (checker-слой)",
+            summary=(
+                f"Отклонение от обычного поведения (checker-слой).\n"
+                f"«Да» — выполню однократно {eid.split('.', 1)[0]}.{service}"
+                f"({eid}) прямо сейчас, через контур доверия; "
+                f"«Нет» — оставлю как есть и молча запомню отказ."
+            ),
             action=action,
         )
         meta["last_deviation_day"] = today

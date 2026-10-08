@@ -44,6 +44,7 @@ def main() -> int:
 
     applied = asyncio.run(coresync.ensure_runtime_config(state))
     logger.info("runtime config: %s", ", ".join(applied) or "already converged")
+    logger.info("build marker: coreprep-0194")  # deploy-pipeline canary
     model_synced = asyncio.run(coresync.sync_model(state))
     logger.info(
         "model sync: %s", "applied" if model_synced else "no active profile (skipped)"

@@ -207,10 +207,15 @@ async def supervisor_scheduler(
             logger.exception("supervisor run failed")  # soft degradation
 
 
-async def core_health_loop(state: RuntimeState, interval_s: float = 30.0) -> None:
+async def core_health_loop(
+    state: RuntimeState,
+    interval_s: float = 30.0,
+    core_up: asyncio.Event | None = None,
+) -> None:
     """Poll the bundled OpenClaw gateway; update the status layer.
 
     Never raises: a dead core degrades the agent features, never the add-on.
+    ``core_up`` (when given) is set on the first alive transition.
     """
     async with aiohttp.ClientSession() as session:
         while True:
@@ -223,6 +228,8 @@ async def core_health_loop(state: RuntimeState, interval_s: float = 30.0) -> Non
             state.core_alive = bool(result.get("alive"))
             if state.core_alive:
                 state.core_last_seen_ts = time.time()
+                if core_up is not None and not core_up.is_set():
+                    core_up.set()
             if state.core_alive != was_alive:
                 logger.warning(
                     "OpenClaw core is now %s (%s)",
@@ -232,11 +239,12 @@ async def core_health_loop(state: RuntimeState, interval_s: float = 30.0) -> Non
             await asyncio.sleep(interval_s)
 
 
-async def ensure_evening_round_when_core_up(state: RuntimeState) -> None:
+async def ensure_evening_round_when_core_up(
+    state: RuntimeState, core_up: asyncio.Event
+) -> None:
     """Create the evening automation once the gateway answers (it needs a
     live gateway; coreprep runs before startup, so this is the retry path)."""
-    while not state.core_alive:
-        await asyncio.sleep(15)
+    await core_up.wait()
     try:
         if await coresync.ensure_evening_round():
             logger.info("core evening round automation ensured")
@@ -273,11 +281,12 @@ async def main() -> None:
 
     # The vitrine is fed by pushes from the HA integration (vitrine_push) —
     # the integration IS HA, so no second WebSocket reader lives here.
+    core_up = asyncio.Event()
     tasks: list[asyncio.Task[None]] = [
         asyncio.create_task(checker_loop(state, checker)),
         asyncio.create_task(norm_loop(state)),
-        asyncio.create_task(core_health_loop(state)),
-        asyncio.create_task(ensure_evening_round_when_core_up(state)),
+        asyncio.create_task(core_health_loop(state, core_up=core_up)),
+        asyncio.create_task(ensure_evening_round_when_core_up(state, core_up)),
     ]
 
     app = create_app(state)

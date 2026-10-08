@@ -52,7 +52,7 @@ async def test_entity_state_proxies_ha(tmp_path, socket_enabled, monkeypatch):
         socket_enabled,
         monkeypatch,
         {
-            "/api/states/sensor.living_temp": lambda r: {
+            "/states/sensor.living_temp": lambda r: {
                 "state": "26.3",
                 "attributes": {"unit_of_measurement": "°C"},
                 "last_changed": "2026-10-08T13:00:00+00:00",
@@ -78,7 +78,7 @@ async def test_entity_state_proxies_ha(tmp_path, socket_enabled, monkeypatch):
 
 async def test_entity_history_compact(tmp_path, socket_enabled, monkeypatch):
     async def hist_any(request: web.Request) -> web.Response:
-        if request.path.startswith("/api/history/period/"):
+        if request.path.startswith("/history/period/"):
             assert "filter_entity_id" in request.query
             return web.json_response(
                 [

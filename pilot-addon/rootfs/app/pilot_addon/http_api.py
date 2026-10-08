@@ -285,7 +285,7 @@ def create_app(
         eid = _entity_id(request)
         if eid is None:
             return web.json_response({"error": "bad entity_id"}, status=400)
-        status, data = await ha_get(f"/api/states/{eid}")
+        status, data = await ha_get(f"/states/{eid}")
         state.queue._audit.record(
             "core.query", {"tool": "home_state", "entity_id": eid, "ha_status": status}
         )
@@ -352,7 +352,7 @@ def create_app(
         status, raw = 0, None
         for variant in variants:
             status, raw = await ha_get(
-                f"/api/history/period/{variant}",
+                f"/history/period/{variant}",
                 params={"filter_entity_id": eid, "minimal_response": ""},
             )
             if status == 200:
@@ -395,7 +395,7 @@ def create_app(
             period = "hour"
         start = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
         status, raw = await ha_post(
-            "/api/recorder/statistics_during_period",
+            "/recorder/statistics_during_period",
             {
                 "start_time": start,
                 "statistic_ids": [eid],

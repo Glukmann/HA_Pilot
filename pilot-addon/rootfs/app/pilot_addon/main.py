@@ -20,7 +20,7 @@ from typing import Any
 import aiohttp
 from aiohttp import web
 
-from . import corehttp, coresync
+from . import corebridge, corehttp, coresync
 from .checker import Checker, EntitySample
 from .discovery import publish_discovery
 from .executor import ExecutorError, HaExecutor
@@ -183,6 +183,7 @@ async def norm_loop(state: RuntimeState, interval_s: float = 1800) -> None:
             # the norm loop is the cheap convergence pass.
             try:
                 coresync.sync_persona(state)
+                corebridge.accrue_heartbeat_estimate(state)
             except Exception:
                 logger.exception("core persona resync failed")
         await asyncio.sleep(interval_s)
@@ -265,6 +266,8 @@ async def main() -> None:
         if await coresync.sync_model(state):
             logger.info("core model synced from the active profile")
         coresync.sync_persona(state)
+        if await coresync.ensure_evening_round():
+            logger.info("core evening round automation ensured")
     except Exception:
         logger.exception("core sync failed")
 

@@ -135,6 +135,42 @@ _PRESET_NAMES = {
     "economy": "Эконом",
 }
 
+EVENING_ROUND_NAME = "pilot-round"
+EVENING_ROUND_CRON = "30 21 * * *"
+EVENING_WEBHOOK = "http://127.0.0.1:8899/api/core-run"
+EVENING_PROMPT = (
+    "Ты Пилот. Вечерний обход дома: прочитай vitrine_get, оцени день "
+    "(отклонения, комфорт, безопасность, расход). Если всё штатно — короткий "
+    "итог одним абзацем; если есть на что обратить внимание хозяина — назови "
+    "это первым. Без действий в доме, только наблюдение."
+)
+
+
+async def ensure_evening_round() -> bool:
+    """Create the evening automation job once (webhook into the add-on)."""
+    from .corebridge import core_cli
+
+    ok, out = await core_cli(["automations", "list"])
+    if not ok:
+        return False
+    if EVENING_ROUND_NAME in out:
+        return True
+    ok_add, _ = await core_cli(
+        [
+            "automations",
+            "add",
+            EVENING_ROUND_CRON,
+            EVENING_PROMPT,
+            "--name",
+            EVENING_ROUND_NAME,
+            "--session",
+            "isolated",
+            "--webhook",
+            EVENING_WEBHOOK,
+        ]
+    )
+    return ok_add
+
 
 def sync_persona(state: Any, language: str = "ru") -> bool:
     """Render persona/policy into the core workspace bootstrap files.

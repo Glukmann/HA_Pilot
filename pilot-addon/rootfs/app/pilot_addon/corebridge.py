@@ -98,8 +98,8 @@ async def ask_core(
     return {"ok": True, "reply": reply, "error": "", "cost": cost}
 
 
-async def config_set(args: list[str]) -> tuple[bool, str]:
-    """Run `openclaw config set …` against the core home; never raises."""
+async def core_cli(args: list[str], timeout_s: float = 20.0) -> tuple[bool, str]:
+    """Run an `openclaw …` CLI against the core home; never raises."""
     import os
 
     env = dict(os.environ)
@@ -107,14 +107,37 @@ async def config_set(args: list[str]) -> tuple[bool, str]:
     try:
         proc = await asyncio.create_subprocess_exec(
             "openclaw",
-            "config",
-            "set",
             *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,
         )
-        out, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
-        return proc.returncode == 0, out.decode(errors="replace")[-500:]
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
+        return proc.returncode == 0, out.decode(errors="replace")[-1000:]
     except (OSError, TimeoutError) as err:
         return False, str(err)[:200]
+
+
+async def config_set(args: list[str]) -> tuple[bool, str]:
+    """Run `openclaw config set …` against the core home; never raises."""
+    return await core_cli(["config", "set", *args])
+
+
+# -- heartbeat cost accounting -------------------------------------------------
+# The silent heartbeat (target:none) never reports usage; the budget guard
+# accrues one honest estimate per day the core is alive. Real figures arrive
+# when supervisor/rounds move to webhook-delivered runs (merge stage 4).
+HEARTBEAT_RUNS_PER_DAY = 8  # every 2h within 08:00-23:00
+HEARTBEAT_RUN_ESTIMATE = 0.2  # ₽ per light-context run
+
+
+def accrue_heartbeat_estimate(state: Any) -> bool:
+    """Accrue the daily heartbeat estimate once; True when accrued."""
+    if not state.core_alive:
+        return False
+    state.reset_cost_if_new_day()
+    if state.heartbeat_estimated_day == state.cost_day:
+        return False
+    state.heartbeat_estimated_day = state.cost_day
+    state.accrue_cost(HEARTBEAT_RUNS_PER_DAY * HEARTBEAT_RUN_ESTIMATE)
+    return True

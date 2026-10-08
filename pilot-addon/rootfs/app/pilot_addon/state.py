@@ -178,6 +178,7 @@ class RuntimeState:
         self.supervisor_busy = False  # ручной run из мастерской (ws)
         self.core_alive = False  # bundled OpenClaw gateway (merge stage 1)
         self.core_last_seen_ts: float | None = None
+        self.heartbeat_estimated_day = ""  # daily cost estimate marker
 
     def push_vitrine(self, states: dict[str, dict[str, Any]]) -> None:
         """Merge a pushed batch into the vitrine and journal transitions."""

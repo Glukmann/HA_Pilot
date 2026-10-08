@@ -265,6 +265,43 @@ def create_app(
             {"status": "queued", "detail": f"queued for owner confirmation ({item_id})"}
         )
 
+    async def core_run(request: web.Request) -> web.Response:
+        """Receive a finished core automation run (evening round webhook).
+
+        Non-empty results land in the trust queue as an informational note;
+        every run is audited. The exact webhook payload shape is core-owned,
+        so text extraction is defensive across field names.
+        """
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "bad json"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "bad json"}, status=400)
+        run_status = str(body.get("status") or "ok")
+        text = ""
+        for key in ("summary", "result", "text", "message", "output", "content"):
+            value = body.get(key)
+            if isinstance(value, str) and value.strip():
+                text = value.strip()
+                break
+        state.queue._audit.record(
+            "core.run",
+            {
+                "name": str(body.get("name") or body.get("jobName") or "core-run"),
+                "status": run_status,
+                "has_summary": bool(text),
+                "estimated": True,
+            },
+        )
+        if text and run_status == "ok":
+            state.queue.propose(
+                title="Вечерний обход Пилота",
+                summary=text[:300],
+                action={"kind": "proposal", "title": text[:300]},
+            )
+        return web.json_response({"ok": True})
+
     async def vitrine(request: web.Request) -> web.Response:
         return web.json_response(state.vitrine.as_dict())
 
@@ -290,6 +327,7 @@ def create_app(
     app.router.add_post("/api/queue/confirm", queue_confirm)
     app.router.add_post("/api/chat", chat)
     app.router.add_post("/api/action", action)
+    app.router.add_post("/api/core-run", core_run)
     app.router.add_get("/api/vitrine", vitrine)
     app.router.add_post("/api/vitrine/update", vitrine_update)
     # Catch-all last: the SPA route matches every GET, so the contract

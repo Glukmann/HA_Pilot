@@ -12,6 +12,8 @@ export interface LayersStatus {
   vitrine: LayerStatus;
   checker: LayerStatus;
   trust: LayerStatus;
+  /** Bundled OpenClaw core gateway (0.18.0+; absent on pre-core add-ons). */
+  core?: LayerStatus;
 }
 
 export interface StatusSnapshot {

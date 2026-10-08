@@ -27,6 +27,11 @@ const LAYER_META: Array<{
     name: "Контур доверия",
     desc: "Очередь подтверждений хозяина и append-only журнал действий.",
   },
+  {
+    key: "core",
+    name: "OpenClaw ядро",
+    desc: "Агентный рантайм: диалог, память, каналы. Статус процесса gateway.",
+  },
 ];
 
 function LayerCard({

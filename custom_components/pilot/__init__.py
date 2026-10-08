@@ -46,7 +46,11 @@ async def _async_setup_services(hass: HomeAssistant, entry: PilotConfigEntry) ->
         result = await coordinator.api.async_ask(str(call.data[ATTR_QUESTION]))
         hass.bus.async_fire(
             f"{DOMAIN}_ask_answered",
-            {"question": str(call.data[ATTR_QUESTION]), "say": result.get("say", "")},
+            {
+                "question": str(call.data[ATTR_QUESTION]),
+                "say": result.get("say", ""),
+                "error": result.get("error", ""),
+            },
         )
 
     async def handle_propose(call: ServiceCall) -> None:

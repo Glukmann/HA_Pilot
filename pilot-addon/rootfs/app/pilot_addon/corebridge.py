@@ -61,7 +61,14 @@ async def ask_core(
         "user": session_key,
         "messages": [{"role": "user", "content": message}],
     }
+    from pathlib import Path
+
+    from .corecfg import read_gateway_token
+
     headers = {"X-OpenClaw-Session": session_key}
+    token = read_gateway_token(Path(state.data_dir))
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     if language:
         headers["Accept-Language"] = language
     owns_session = session is None

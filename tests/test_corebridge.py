@@ -25,6 +25,13 @@ def _with_profile(tmp_path) -> None:
         json.dumps({"schema_version": 3, "supervisor": dict(PROFILE)}),
         encoding="utf-8",
     )
+    # The gateway's own auth token — ask_core must present it to /v1/*.
+    core_dir = tmp_path / "openclaw"
+    core_dir.mkdir(exist_ok=True)
+    (core_dir / "openclaw.json").write_text(
+        json.dumps({"gateway": {"auth": {"mode": "token", "token": "gw-tok"}}}),
+        encoding="utf-8",
+    )
 
 
 async def test_ask_core_success_counts_cost(tmp_path, socket_enabled, monkeypatch):
@@ -33,6 +40,7 @@ async def test_ask_core_success_counts_cost(tmp_path, socket_enabled, monkeypatc
 
     async def chat(request: web.Request) -> web.Response:
         seen["session"] = request.headers.get("X-OpenClaw-Session")
+        seen["auth"] = request.headers.get("Authorization")
         return web.json_response(
             {
                 "choices": [{"message": {"content": "Привет, всё в порядке."}}],
@@ -56,6 +64,7 @@ async def test_ask_core_success_counts_cost(tmp_path, socket_enabled, monkeypatc
     assert result["ok"] is True
     assert result["reply"] == "Привет, всё в порядке."
     assert seen["session"] == "pilot:c-1"
+    assert seen["auth"] == "Bearer gw-tok"
     # 1000*2/1e6 + 500*6/1e6 = 0.005
     assert abs(result["cost"] - 0.005) < 1e-9
     assert abs(state.cost_today - 0.005) < 1e-9

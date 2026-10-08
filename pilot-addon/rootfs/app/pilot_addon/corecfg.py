@@ -28,6 +28,19 @@ def config_path(data_dir: Path) -> Path:
     return state_dir(data_dir) / CONFIG_NAME
 
 
+def read_gateway_token(data_dir: Path) -> str:
+    """The gateway's own auth token (loopback bearer for /v1/* endpoints)."""
+    try:
+        cfg = json.loads(config_path(data_dir).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    gateway = cfg.get("gateway")
+    auth = gateway.get("auth") if isinstance(gateway, dict) else None
+    if not isinstance(auth, dict):
+        return ""
+    return str(auth.get("token") or "")
+
+
 def _default_config() -> dict[str, Any]:
     return {
         "gateway": {

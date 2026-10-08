@@ -39,7 +39,14 @@ async def ensure_runtime_config(state: Any) -> list[str]:
         (
             [
                 "tools.allow",
-                json.dumps(["group:memory", "vitrine_get", "home_action"]),
+                json.dumps(
+                    [
+                        "vitrine_get",
+                        "home_action",
+                        "memory_search",
+                        "memory_get",
+                    ]
+                ),
                 "--strict-json",
             ],
             "tool allowlist",

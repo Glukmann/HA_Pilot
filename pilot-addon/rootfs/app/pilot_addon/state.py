@@ -157,7 +157,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.19.7"
+        self.runtime_version = "0.19.8"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"

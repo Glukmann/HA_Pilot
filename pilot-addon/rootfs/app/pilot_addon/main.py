@@ -21,6 +21,7 @@ import aiohttp
 from aiohttp import web
 
 from .checker import Checker, EntitySample
+from . import corehttp
 from .discovery import publish_discovery
 from .executor import ExecutorError, HaExecutor
 from .http_api import create_app
@@ -198,6 +199,31 @@ async def supervisor_scheduler(
             logger.exception("supervisor run failed")  # soft degradation
 
 
+async def core_health_loop(state: RuntimeState, interval_s: float = 30.0) -> None:
+    """Poll the bundled OpenClaw gateway; update the status layer.
+
+    Never raises: a dead core degrades the agent features, never the add-on.
+    """
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                result = await corehttp.core_health(session)
+            except Exception:
+                logger.exception("core health probe failed")
+                result = {"alive": False, "detail": "probe error"}
+            was_alive = state.core_alive
+            state.core_alive = bool(result.get("alive"))
+            if state.core_alive:
+                state.core_last_seen_ts = time.time()
+            if state.core_alive != was_alive:
+                logger.warning(
+                    "OpenClaw core is now %s (%s)",
+                    "alive" if state.core_alive else "down",
+                    result.get("detail", ""),
+                )
+            await asyncio.sleep(interval_s)
+
+
 async def main() -> None:
     """Start HTTP API + vitrine mirror + scheduler."""
     logging.basicConfig(
@@ -226,6 +252,7 @@ async def main() -> None:
     tasks: list[asyncio.Task[None]] = [
         asyncio.create_task(checker_loop(state, checker)),
         asyncio.create_task(norm_loop(state)),
+        asyncio.create_task(core_health_loop(state)),
     ]
 
     app = create_app(state)

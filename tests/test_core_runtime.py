@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+import time
 
 from pilot_addon.state import CONFIG_SCHEMA_VERSION, RuntimeState, migrate_config
 
@@ -33,3 +35,44 @@ def test_layers_status_includes_core(tmp_path: Path):
 def test_runtime_version_is_0180(tmp_path: Path):
     state = RuntimeState(str(tmp_path))
     assert state.runtime_version == "0.18.0"
+
+
+async def _fake_health(_session, **_kwargs):
+    return {"alive": True, "detail": "ok"}
+
+
+async def test_core_health_loop_updates_state(tmp_path, monkeypatch):
+    from pilot_addon import main as main_module
+
+    monkeypatch.setattr(main_module.corehttp, "core_health", _fake_health)
+    state = RuntimeState(str(tmp_path))
+    task = asyncio.create_task(main_module.core_health_loop(state, interval_s=3600))
+    for _ in range(100):
+        await asyncio.sleep(0.01)
+        if state.core_alive:
+            break
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    assert state.core_alive is True
+    assert state.core_last_seen_ts and state.core_last_seen_ts <= time.time()
+
+
+async def test_core_health_loop_swallows_probe_errors(tmp_path, monkeypatch):
+    from pilot_addon import main as main_module
+
+    async def _boom(_session, **_kwargs):
+        raise RuntimeError("probe bug")
+
+    monkeypatch.setattr(main_module.corehttp, "core_health", _boom)
+    state = RuntimeState(str(tmp_path))
+    task = asyncio.create_task(main_module.core_health_loop(state, interval_s=3600))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    assert state.core_alive is False

@@ -32,9 +32,9 @@ def test_layers_status_includes_core(tmp_path: Path):
     assert layers["core"] == {"alive": True, "last_run_ts": 123.0}
 
 
-def test_runtime_version_is_0205(tmp_path: Path):
+def test_runtime_version_is_0206(tmp_path: Path):
     state = RuntimeState(str(tmp_path))
-    assert state.runtime_version == "0.20.5"
+    assert state.runtime_version == "0.20.6"
 
 
 async def _fake_health(_session, **_kwargs):

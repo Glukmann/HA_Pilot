@@ -461,9 +461,11 @@ def create_app(
             },
         )
         if text and run_status == "ok":
+            # The digest is the owner-facing text — keep it whole (the UI
+            # wraps; queue storage has no practical field limit).
             state.queue.propose(
                 title="Вечерний обход Пилота",
-                summary=text[:300],
+                summary=text[:3500],
                 action={"kind": "proposal", "title": text[:300]},
             )
         return web.json_response({"ok": True})

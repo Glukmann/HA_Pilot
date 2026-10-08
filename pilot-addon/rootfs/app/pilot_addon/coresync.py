@@ -108,12 +108,32 @@ async def ensure_runtime_config(state: Any) -> list[str]:
 
 async def sync_model(state: Any) -> bool:
     """Active model profile (pilot.json) -> core provider + default model."""
+    import logging
+
+    logger = logging.getLogger("pilot.coresync")
     raw = state.read_config() or {}
     section = raw.get("supervisor")
     profile = resolve_section(section if isinstance(section, dict) else {})
     base_url = str(profile.get("base_url") or "")
     model = str(profile.get("model") or "")
     if not base_url or not model:
+        # Diagnostics (no secrets): which fields the resolved profile lacked.
+        keys = sorted(section.keys()) if isinstance(section, dict) else []
+        first = {}
+        models = section.get("models") if isinstance(section, dict) else None
+        if isinstance(models, list) and models and isinstance(models[0], dict):
+            first = {
+                k: ("<set>" if "key" in k.lower() else v)
+                for k, v in models[0].items()
+                if k in ("id", "base_url", "model", "label")
+            }
+        logger.warning(
+            "sync_model skipped: base_url=%s model=%s | section keys=%s | first profile=%s",
+            bool(base_url),
+            model or "<empty>",
+            keys,
+            first,
+        )
         return False
     provider = {
         "baseUrl": base_url,

@@ -141,10 +141,20 @@ async def sync_model(state: Any) -> bool:
         "api": "openai-completions",
         "models": [{"id": model}],
     }
-    ok_provider, _ = await config_set(
-        ["models.providers.pilot", json.dumps(provider), "--strict-json", "--merge"]
+    # No --merge: the add-on owns providers.pilot wholesale, and the core
+    # refuses list/object merges on existing keys ("use --replace").
+    ok_provider, out_provider = await config_set(
+        ["models.providers.pilot", json.dumps(provider), "--strict-json"]
     )
-    ok_model, _ = await config_set(["agents.defaults.model", f'"pilot/{model}"'])
+    ok_model, out_model = await config_set(["agents.defaults.model", f'"pilot/{model}"'])
+    if not (ok_provider and ok_model):
+        logging.getLogger("pilot.coresync").warning(
+            "sync_model write failed: provider=%s (%s) default=%s (%s)",
+            ok_provider,
+            out_provider.strip()[-200:],
+            ok_model,
+            out_model.strip()[-200:],
+        )
     return ok_provider and ok_model
 
 

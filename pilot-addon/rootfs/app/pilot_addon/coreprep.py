@@ -44,7 +44,7 @@ def main() -> int:
 
     applied = asyncio.run(coresync.ensure_runtime_config(state))
     logger.info("runtime config: %s", ", ".join(applied) or "already converged")
-    logger.info("build marker: coreprep-0195")  # deploy-pipeline canary
+    logger.info("build marker: coreprep-0196")  # deploy-pipeline canary
 
     # Ground-truth resolution diagnostics (no secrets) — independent of
     # whatever coresync build ships in this image.
@@ -61,7 +61,7 @@ def main() -> int:
     )
     model_synced = asyncio.run(coresync.sync_model(state))
     logger.info(
-        "model sync: %s", "applied" if model_synced else "no active profile (skipped)"
+        "model sync: %s", "applied" if model_synced else "FAILED (see warning above)"
     )
     persona_changed = coresync.sync_persona(state)
     logger.info("persona files: %s", "written" if persona_changed else "unchanged")

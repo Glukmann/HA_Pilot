@@ -344,10 +344,19 @@ def create_app(
         start = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
         from urllib.parse import quote
 
-        status, raw = await ha_get(
-            f"/api/history/period/{quote(start, safe='')}",
-            params={"filter_entity_id": eid, "minimal_response": ""},
-        )
+        # The Supervisor proxy rejects some path-encodings of the ISO
+        # timestamp (404 where a direct call returns 200) — walk formats
+        # until one passes.
+        naive = start.split("+")[0].replace("T", " ")
+        variants = [quote(start, safe=""), start, naive, quote(naive, safe="")]
+        status, raw = 0, None
+        for variant in variants:
+            status, raw = await ha_get(
+                f"/api/history/period/{variant}",
+                params={"filter_entity_id": eid, "minimal_response": ""},
+            )
+            if status == 200:
+                break
         state.queue._audit.record(
             "core.query",
             {

@@ -28,6 +28,20 @@ def main() -> int:
     data_dir = Path(os.environ.get("PILOT_DATA", "/data"))
     state = build_state(data_dir)
 
+    # Diagnostics (no secrets): why a profile may be missing on this host.
+    from .modelstore import active_id_of, profiles_of
+
+    raw = state.read_config() or {}
+    section = raw.get("supervisor")
+    profiles = profiles_of(section) if isinstance(section, dict) else []
+    logger.info(
+        "pilot.json: schema=%s supervisor=%s profiles=%d active=%s",
+        raw.get("schema_version"),
+        "present" if isinstance(section, dict) else "MISSING",
+        len(profiles),
+        active_id_of(section) if isinstance(section, dict) else None,
+    )
+
     applied = asyncio.run(coresync.ensure_runtime_config(state))
     logger.info("runtime config: %s", ", ".join(applied) or "already converged")
     model_synced = asyncio.run(coresync.sync_model(state))

@@ -86,8 +86,8 @@ def _with_profile(tmp_path) -> None:
                     "base_url": "https://x/v1",
                     "api_key": "k",
                     "model": "m",
-                    "input_price": 2.0,
-                    "output_price": 6.0,
+                    "price_input_per_1m": 2.0,
+                    "price_output_per_1m": 6.0,
                 },
             }
         ),

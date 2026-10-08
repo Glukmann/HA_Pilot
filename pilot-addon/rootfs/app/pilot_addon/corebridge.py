@@ -22,8 +22,8 @@ CHAT_URL = f"http://127.0.0.1:{GATEWAY_PORT}/v1/chat/completions"
 def _cost_from_usage(profile: dict[str, Any], usage: dict[str, Any]) -> float:
     """₽ from token usage and the active profile's per-million prices."""
     try:
-        input_price = float(profile.get("input_price") or 0.0)
-        output_price = float(profile.get("output_price") or 0.0)
+        input_price = float(profile.get("price_input_per_1m") or 0.0)
+        output_price = float(profile.get("price_output_per_1m") or 0.0)
         prompt = float(usage.get("prompt_tokens") or 0.0)
         completion = float(usage.get("completion_tokens") or 0.0)
     except (TypeError, ValueError):

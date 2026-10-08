@@ -15,8 +15,8 @@ PROFILE = {
     "base_url": "https://llm.example/v1",
     "api_key": "k",
     "model": "deepseek-chat",
-    "input_price": 2.0,
-    "output_price": 6.0,
+    "price_input_per_1m": 2.0,
+    "price_output_per_1m": 6.0,
 }
 
 

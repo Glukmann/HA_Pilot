@@ -20,8 +20,8 @@ from typing import Any
 import aiohttp
 from aiohttp import web
 
-from .checker import Checker, EntitySample
 from . import corehttp
+from .checker import Checker, EntitySample
 from .discovery import publish_discovery
 from .executor import ExecutorError, HaExecutor
 from .http_api import create_app

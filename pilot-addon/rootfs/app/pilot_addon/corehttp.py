@@ -17,12 +17,12 @@ CORE_BASE = "http://127.0.0.1:18789"
 async def core_health(
     session: aiohttp.ClientSession,
     base: str = CORE_BASE,
-    timeout: float = 3.0,
+    timeout_s: float = 3.0,
 ) -> dict[str, Any]:
     """Probe the core gateway; never raises."""
     try:
         async with session.get(
-            f"{base}/healthz", timeout=aiohttp.ClientTimeout(total=timeout)
+            f"{base}/healthz", timeout=aiohttp.ClientTimeout(total=timeout_s)
         ) as resp:
             if resp.status == 200:
                 return {"alive": True, "detail": "ok"}

@@ -5,7 +5,6 @@ from __future__ import annotations
 import aiohttp
 from aiohttp import web
 from aiohttp.test_utils import TestServer
-
 from pilot_addon.corehttp import CORE_BASE, core_health
 
 
@@ -29,7 +28,7 @@ async def test_health_alive(socket_enabled):
 
 async def test_health_down_never_raises(socket_enabled):
     async with aiohttp.ClientSession() as session:
-        result = await core_health(session, base="http://127.0.0.1:1", timeout=0.2)
+        result = await core_health(session, base="http://127.0.0.1:1", timeout_s=0.2)
     assert result["alive"] is False
     assert result["detail"]
     assert CORE_BASE == "http://127.0.0.1:18789"

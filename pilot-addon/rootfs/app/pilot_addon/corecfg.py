@@ -58,9 +58,7 @@ def seed_config(data_dir: Path, core_version: str = "") -> bool:
     )
     tmp.replace(cfg_path)
     if core_version:
-        (cfg_path.parent / ".core-version").write_text(
-            core_version, encoding="utf-8"
-        )
+        (cfg_path.parent / ".core-version").write_text(core_version, encoding="utf-8")
     return True
 
 

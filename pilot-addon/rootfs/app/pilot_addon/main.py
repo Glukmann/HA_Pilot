@@ -232,6 +232,18 @@ async def core_health_loop(state: RuntimeState, interval_s: float = 30.0) -> Non
             await asyncio.sleep(interval_s)
 
 
+async def ensure_evening_round_when_core_up(state: RuntimeState) -> None:
+    """Create the evening automation once the gateway answers (it needs a
+    live gateway; coreprep runs before startup, so this is the retry path)."""
+    while not state.core_alive:
+        await asyncio.sleep(15)
+    try:
+        if await coresync.ensure_evening_round():
+            logger.info("core evening round automation ensured")
+    except Exception:
+        logger.exception("evening round ensure failed")  # retried on next boot
+
+
 async def main() -> None:
     """Start HTTP API + vitrine mirror + scheduler."""
     logging.basicConfig(
@@ -255,21 +267,9 @@ async def main() -> None:
     checker = Checker()
     state.attach_checker(checker)
 
-    # Converge the bundled core: runtime config (plugin/tools/hooks/heartbeat),
-    # the active model profile, and the persona workspace files. Hot-reload
-    # applies them without a gateway restart; failures degrade softly and
-    # retry on the next boot.
-    try:
-        applied = await coresync.ensure_runtime_config(state)
-        if applied:
-            logger.info("core runtime config ensured: %s", ", ".join(applied))
-        if await coresync.sync_model(state):
-            logger.info("core model synced from the active profile")
-        coresync.sync_persona(state)
-        if await coresync.ensure_evening_round():
-            logger.info("core evening round automation ensured")
-    except Exception:
-        logger.exception("core sync failed")
+    # Core config convergence runs BEFORE the gateway starts (coreprep in
+    # the openclaw s6 service) — writing config during gateway startup makes
+    # it refuse readiness. Here we only keep the long-running layers.
 
     # The vitrine is fed by pushes from the HA integration (vitrine_push) —
     # the integration IS HA, so no second WebSocket reader lives here.
@@ -277,6 +277,7 @@ async def main() -> None:
         asyncio.create_task(checker_loop(state, checker)),
         asyncio.create_task(norm_loop(state)),
         asyncio.create_task(core_health_loop(state)),
+        asyncio.create_task(ensure_evening_round_when_core_up(state)),
     ]
 
     app = create_app(state)

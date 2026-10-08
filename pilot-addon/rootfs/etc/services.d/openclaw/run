@@ -11,4 +11,8 @@ if [ ! -f /data/openclaw/openclaw.json ]; then
     python3 -m pilot_addon.corecfg
 fi
 
+# Pre-flight: converge plugin/tools/hooks/heartbeat/model/persona BEFORE the
+# gateway starts — it refuses readiness when config changes during startup.
+python3 -m pilot_addon.coreprep
+
 exec node /opt/openclaw/openclaw.mjs gateway

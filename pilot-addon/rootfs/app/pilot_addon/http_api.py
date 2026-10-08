@@ -163,8 +163,13 @@ def create_app(
         return web.json_response({"ok": True})
 
     async def chat(request: web.Request) -> web.Response:
-        """One conversation turn (the Assist remote control)."""
-        from .chat import chat_ask  # lazy: keeps startup import graph small
+        """One conversation turn — through the bundled OpenClaw core agent.
+
+        The core holds the dialogue, memory and sessions; its pilot-home
+        tools reach the home only via /api/action (trust contour). The
+        response contract for the HA integration stays {say, actions}.
+        """
+        from .corebridge import ask_core  # lazy: keeps startup import small
 
         body = await request.json()
         message = str(body.get("message") or "").strip()
@@ -172,10 +177,22 @@ def create_app(
             return web.json_response({"error": "message required"}, status=400)
         conversation_id = str(body.get("conversation_id") or "").strip() or None
         language = str(body.get("language") or "").strip() or None
-        result = await chat_ask(
+        result = await ask_core(
             state, message, conversation_id=conversation_id, language=language
         )
-        return web.json_response(result)
+        if result["ok"]:
+            return web.json_response(
+                {"say": result["reply"], "actions": [], "via": "core"}
+            )
+        if result["error"] == "budget":
+            say = "Дневной лимит бюджета исчерпан — продолжим завтра."
+        elif result["error"] == "not_configured":
+            say = "Агент ещё не настроен — пройдите онбординг в мастерской."
+        else:
+            say = "Агент временно недоступен (ядро не отвечает), попробуйте позже."
+        return web.json_response(
+            {"say": say, "actions": [], "error": result["error"], "via": "core"}
+        )
 
     async def action(request: web.Request) -> web.Response:
         """The core tool plugin's door into the home (trust-guarded).

@@ -76,6 +76,7 @@ from typing import Any
 import aiohttp
 from aiohttp import WSMsgType, web
 
+from . import coresync
 from .logbuffer import LogBuffer
 from .modelstore import (
     ModelError,
@@ -233,6 +234,38 @@ async def _cmd_logs_unsubscribe(
     return {"ok": True}
 
 
+# Strong refs to fire-and-forget resync tasks (RUF006).
+_background: set[asyncio.Task[None]] = set()
+
+
+def _resync_model_later(state: RuntimeState) -> None:
+    """Push the active model profile into the core after a models/* change."""
+
+    async def _run() -> None:
+        try:
+            await coresync.sync_model(state)
+        except Exception:
+            logger.exception("core model resync failed")
+
+    task = asyncio.create_task(_run())
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+
+
+def _resync_persona_later(state: RuntimeState) -> None:
+    """Re-render the core workspace persona files after a persona change."""
+
+    async def _run() -> None:
+        try:
+            coresync.sync_persona(state)
+        except Exception:
+            logger.exception("core persona resync failed")
+
+    task = asyncio.create_task(_run())
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+
+
 async def _cmd_persona_set(
     session: WsSession, payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -247,6 +280,7 @@ async def _cmd_persona_set(
         session.state.set_persona(slider, value)
     except ValueError as err:
         raise CommandError(str(err)) from err
+    _resync_persona_later(session.state)
     return {"ok": True}
 
 
@@ -261,6 +295,7 @@ async def _cmd_preset_apply(
         session.state.apply_preset(preset)
     except ValueError as err:
         raise CommandError(str(err)) from err
+    _resync_persona_later(session.state)
     return {"ok": True}
 
 
@@ -286,6 +321,7 @@ async def _cmd_mode_set(session: WsSession, payload: dict[str, Any]) -> dict[str
         session.state.set_mode(mode)
     except ValueError as err:
         raise CommandError(str(err)) from err
+    _resync_persona_later(session.state)
     return {"ok": True}
 
 
@@ -377,6 +413,7 @@ async def _cmd_models_upsert(
     # Audit and logs carry the id only — never keys or endpoints.
     session.state.queue._audit.record("models.upsert", {"id": profile_id})
     logger.info("models.upsert id=%s", profile_id)
+    _resync_model_later(session.state)
     return {"ok": True, "id": profile_id}
 
 
@@ -392,6 +429,7 @@ async def _cmd_models_remove(
     _write_supervisor(session.state, {"models": models})
     session.state.queue._audit.record("models.remove", {"id": profile_id})
     logger.info("models.remove id=%s", profile_id)
+    _resync_model_later(session.state)
     return {"ok": True}
 
 
@@ -405,6 +443,7 @@ async def _cmd_models_activate(
     _write_supervisor(session.state, {"active_id": profile_id})
     session.state.queue._audit.record("models.activate", {"id": profile_id})
     logger.info("models.activate id=%s", profile_id)
+    _resync_model_later(session.state)
     return {"ok": True, "active_id": profile_id}
 
 

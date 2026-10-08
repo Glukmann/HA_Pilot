@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
-import aiohttp
 from aiohttp import web
 from pilot_addon import supervisor
 from pilot_addon.http_api import create_app
@@ -152,99 +149,6 @@ async def _start(tmp_path, socket_enabled, monkeypatch):
         await runner.cleanup()
 
     return state, client_port, llm, close
-
-
-async def test_chat_turn_classifies_actions(tmp_path, socket_enabled, monkeypatch):
-    state, port, llm, close = await _start(tmp_path, socket_enabled, monkeypatch)
-    try:
-        llm.content = json.dumps(
-            {
-                "say": "Сделал.",
-                "actions": [
-                    {
-                        "domain": "light",
-                        "service": "turn_off",
-                        "entity_id": "light.hall",
-                    },
-                    {
-                        "domain": "switch",
-                        "service": "turn_on",
-                        "entity_id": "switch.pump",
-                    },
-                    {
-                        "domain": "camera",
-                        "service": "turn_on",
-                        "entity_id": "camera.porch",
-                    },
-                ],
-            }
-        )
-        async with aiohttp.ClientSession() as http:
-            async with http.post(
-                f"http://127.0.0.1:{port}/api/chat", json={"message": "выключи свет"}
-            ) as resp:
-                assert resp.status == 200
-                data = await resp.json()
-        assert data["say"] == "Сделал."
-        modes = [a["mode"] for a in data["actions"]]
-        assert modes == ["direct", "queue", "refuse"]
-        # Cost accrued into the shared daily budget; LLM saw the vitrine.
-        assert state.cost_today > 0
-        assert "Карта дома (витрина):" in llm.requests[0]["messages"][1]["content"]
-    finally:
-        await close()
-
-
-async def test_chat_no_config_and_budget(tmp_path, socket_enabled, monkeypatch):
-    state, port, _llm, close = await _start(tmp_path, socket_enabled, monkeypatch)
-    try:
-        import aiohttp
-
-        # No profiles and no legacy config -> not configured.
-        state.config_path.unlink(missing_ok=True)
-        async with aiohttp.ClientSession() as http:
-            async with http.post(
-                f"http://127.0.0.1:{port}/api/chat", json={"message": "привет"}
-            ) as resp:
-                data = await resp.json()
-        assert data["error"] == "no_config"
-        assert "не настроен" in data["say"]
-
-        # Budget exhausted -> honest refusal, no LLM call.
-        state.write_config_section(
-            "supervisor",
-            {
-                "base_url": "http://127.0.0.1:9/v1",
-                "api_key": "k",
-                "model": "m",
-            },
-        )
-        state.daily_budget = 0.0
-        async with aiohttp.ClientSession() as http:
-            async with http.post(
-                f"http://127.0.0.1:{port}/api/chat", json={"message": "привет"}
-            ) as resp:
-                data = await resp.json()
-        assert data["error"] == "budget"
-    finally:
-        await close()
-
-
-async def test_chat_parse_error_is_soft(tmp_path, socket_enabled, monkeypatch):
-    _state, port, llm, close = await _start(tmp_path, socket_enabled, monkeypatch)
-    try:
-        llm.content = "я не json"
-        import aiohttp
-
-        async with aiohttp.ClientSession() as http:
-            async with http.post(
-                f"http://127.0.0.1:{port}/api/chat", json={"message": "привет"}
-            ) as resp:
-                data = await resp.json()
-        assert data["error"] == "parse_error"
-        assert data["actions"] == []
-    finally:
-        await close()
 
 
 async def test_queue_propose_endpoint(tmp_path, socket_enabled):

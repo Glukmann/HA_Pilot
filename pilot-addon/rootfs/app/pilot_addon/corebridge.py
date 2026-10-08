@@ -41,7 +41,7 @@ async def ask_core(
     state: Any,
     message: str,
     conversation_id: str | None = None,
-    language: str = "ru",
+    language: str | None = "ru",
     session: aiohttp.ClientSession | None = None,
 ) -> dict[str, Any]:
     """One owner turn through the core agent.

@@ -20,7 +20,7 @@ from typing import Any
 import aiohttp
 from aiohttp import web
 
-from . import corehttp
+from . import corehttp, coresync
 from .checker import Checker, EntitySample
 from .discovery import publish_discovery
 from .executor import ExecutorError, HaExecutor
@@ -178,6 +178,13 @@ async def norm_loop(state: RuntimeState, interval_s: float = 1800) -> None:
             await run_reflexion(state)
         except Exception:
             logger.exception("norm detection failed")  # soft degradation
+        if state.core_alive:
+            # Persona/policy can change via the HA integration too (REST);
+            # the norm loop is the cheap convergence pass.
+            try:
+                coresync.sync_persona(state)
+            except Exception:
+                logger.exception("core persona resync failed")
         await asyncio.sleep(interval_s)
 
 
@@ -246,6 +253,20 @@ async def main() -> None:
     gate = begin_update(DATA_DIR, core_version)
     checker = Checker()
     state.attach_checker(checker)
+
+    # Converge the bundled core: runtime config (plugin/tools/hooks/heartbeat),
+    # the active model profile, and the persona workspace files. Hot-reload
+    # applies them without a gateway restart; failures degrade softly and
+    # retry on the next boot.
+    try:
+        applied = await coresync.ensure_runtime_config(state)
+        if applied:
+            logger.info("core runtime config ensured: %s", ", ".join(applied))
+        if await coresync.sync_model(state):
+            logger.info("core model synced from the active profile")
+        coresync.sync_persona(state)
+    except Exception:
+        logger.exception("core sync failed")
 
     # The vitrine is fed by pushes from the HA integration (vitrine_push) —
     # the integration IS HA, so no second WebSocket reader lives here.

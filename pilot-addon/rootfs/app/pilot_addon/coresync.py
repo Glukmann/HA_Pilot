@@ -42,6 +42,9 @@ async def ensure_runtime_config(state: Any) -> list[str]:
                 json.dumps(
                     [
                         "vitrine_get",
+                        "home_state",
+                        "home_history",
+                        "home_statistics",
                         "home_action",
                         "memory_search",
                         "memory_get",
@@ -154,7 +157,9 @@ async def sync_model(state: Any) -> bool:
     ok_provider, out_provider = await config_set(
         ["models.providers.pilot", json.dumps(provider), "--strict-json"]
     )
-    ok_model, out_model = await config_set(["agents.defaults.model", f'"pilot/{model}"'])
+    ok_model, out_model = await config_set(
+        ["agents.defaults.model", f'"pilot/{model}"']
+    )
     if not (ok_provider and ok_model):
         logging.getLogger("pilot.coresync").warning(
             "sync_model write failed: provider=%s (%s) default=%s (%s)",

@@ -16,6 +16,9 @@ Endpoints (see custom_components/pilot/api.py):
                             {"say", "actions": [{mode: direct|queue|refuse, …}]}
     GET  /api/vitrine
     POST /api/vitrine/update
+    GET  /api/entity-state?entity_id=…       — fresh reading from HA (agent tool)
+    GET  /api/entity-history?entity_id=…&hours=24 — change history (agent tool)
+    GET  /api/entity-statistics?entity_id=…&hours=24&period=hour — recorder stats
     WS   /ws               workshop SPA protocol (see ws_api.py)
     GET  /{anything}       workshop SPA static files (see workshop_static.py)
 """
@@ -25,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+import re
 from typing import Any
 
 from aiohttp import web
@@ -32,6 +36,9 @@ from aiohttp import web
 from . import workshop_static, ws_api
 from .logbuffer import LogBuffer, RingBufferHandler
 from .state import RuntimeState
+
+_ENTITY_ID_RE = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+_HISTORY_HOURS_MAX = 168.0
 
 
 def _auth_ok(request: web.Request, state: RuntimeState) -> bool:
@@ -265,6 +272,103 @@ def create_app(
             {"status": "queued", "detail": f"queued for owner confirmation ({item_id})"}
         )
 
+    # -- agent read tools: fresh state / history / statistics -------------
+
+    def _entity_id(request: web.Request) -> str | None:
+        eid = str(request.query.get("entity_id") or "")
+        return eid if _ENTITY_ID_RE.match(eid) else None
+
+    async def entity_state(request: web.Request) -> web.Response:
+        """Fresh reading of one entity, straight from HA (read-only)."""
+        from .homequery import ha_get
+
+        eid = _entity_id(request)
+        if eid is None:
+            return web.json_response({"error": "bad entity_id"}, status=400)
+        status, data = await ha_get(f"/api/states/{eid}")
+        if status != 200 or not isinstance(data, dict):
+            return web.json_response({"error": f"ha http {status}"}, status=502)
+        return web.json_response(
+            {
+                "entity_id": eid,
+                "state": data.get("state"),
+                "attrs": data.get("attributes"),
+                "last_changed": data.get("last_changed"),
+                "last_updated": data.get("last_updated"),
+            }
+        )
+
+    async def entity_history(request: web.Request) -> web.Response:
+        """Change history: turn-on times, trends (read-only)."""
+        from datetime import UTC, datetime, timedelta
+
+        from .homequery import compact_history, ha_get
+
+        eid = _entity_id(request)
+        if eid is None:
+            return web.json_response({"error": "bad entity_id"}, status=400)
+        try:
+            hours = min(
+                _HISTORY_HOURS_MAX, max(1.0, float(request.query.get("hours", "24")))
+            )
+        except ValueError:
+            hours = 24.0
+        start = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+        status, raw = await ha_get(
+            f"/api/history/period/{start}",
+            params={"filter_entity_id": eid, "minimal_response": ""},
+        )
+        if status != 200:
+            return web.json_response({"error": f"ha http {status}"}, status=502)
+        return web.json_response({"entity_id": eid, **compact_history(raw, hours)})
+
+    async def entity_statistics(request: web.Request) -> web.Response:
+        """Recorder statistics: energy sums, averages (read-only)."""
+        from datetime import UTC, datetime, timedelta
+
+        from .homequery import ha_post
+
+        eid = _entity_id(request)
+        if eid is None:
+            return web.json_response({"error": "bad entity_id"}, status=400)
+        try:
+            hours = min(
+                _HISTORY_HOURS_MAX, max(1.0, float(request.query.get("hours", "24")))
+            )
+        except ValueError:
+            hours = 24.0
+        period = str(request.query.get("period") or "hour")
+        if period not in ("hour", "day", "5minute"):
+            period = "hour"
+        start = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+        status, raw = await ha_post(
+            "/api/recorder/statistics_during_period",
+            {
+                "start_time": start,
+                "statistic_ids": [eid],
+                "period": period,
+                "types": ["state", "sum", "mean", "min", "max"],
+            },
+        )
+        if status != 200 or not isinstance(raw, list) or not raw:
+            return web.json_response(
+                {"entity_id": eid, "error": f"no statistics (ha http {status})"},
+                status=404 if status == 400 else 502,
+            )
+        block = raw[0] if isinstance(raw[0], dict) else {}
+        starts = block.get("start") or []
+        points = []
+        for idx, ts in enumerate(starts):
+            point: dict[str, Any] = {"start": ts}
+            for key in ("state", "sum", "mean", "min", "max"):
+                values = block.get(key)
+                if isinstance(values, list) and idx < len(values):
+                    point[key] = values[idx]
+            points.append(point)
+        return web.json_response(
+            {"entity_id": eid, "period": period, "hours": hours, "points": points}
+        )
+
     async def core_run(request: web.Request) -> web.Response:
         """Receive a finished core automation run (evening round webhook).
 
@@ -328,6 +432,9 @@ def create_app(
     app.router.add_post("/api/chat", chat)
     app.router.add_post("/api/action", action)
     app.router.add_post("/api/core-run", core_run)
+    app.router.add_get("/api/entity-state", entity_state)
+    app.router.add_get("/api/entity-history", entity_history)
+    app.router.add_get("/api/entity-statistics", entity_statistics)
     app.router.add_get("/api/vitrine", vitrine)
     app.router.add_post("/api/vitrine/update", vitrine_update)
     # Catch-all last: the SPA route matches every GET, so the contract

@@ -1,7 +1,7 @@
 {
   "id": "pilot-home",
   "name": "Pilot Home",
-  "description": "Eyes and hands of the Pilot agent in the Home Assistant home: the vitrine snapshot and trust-guarded actions.",
+  "description": "Eyes and hands of the Pilot agent in the Home Assistant home: the vitrine snapshot, deep read-only queries (state/history/statistics) and trust-guarded actions.",
   "version": "0.1.0",
   "configSchema": {
     "type": "object",
@@ -14,6 +14,9 @@
   "contracts": {
     "tools": [
       "vitrine_get",
+      "home_state",
+      "home_history",
+      "home_statistics",
       "home_action"
     ]
   }

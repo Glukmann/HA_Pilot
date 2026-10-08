@@ -18,7 +18,8 @@ export default defineToolPlugin({
   name: "Pilot Home",
   description:
     "Eyes and hands of the Pilot agent in the Home Assistant home: " +
-    "the vitrine snapshot and trust-guarded actions.",
+    "the vitrine snapshot, deep read-only queries (state/history/statistics) " +
+    "and trust-guarded actions.",
   activation: { onStartup: true },
   tools: (tool) => [
     tool({
@@ -32,6 +33,79 @@ export default defineToolPlugin({
           return await getText("/api/vitrine");
         } catch (err) {
           return `vitrine unavailable: ${String(err).slice(0, 200)}`;
+        }
+      },
+    }),
+    tool({
+      name: "home_state",
+      description:
+        "Свежее значение ОДНОЙ сущности напрямую из HA (state, атрибуты, " +
+        "last_changed). Используй, когда витрины не хватает или нужна точность.",
+      parameters: Type.Object({
+        entity_id: Type.String({ description: "например sensor.gostinaia_temperatura" }),
+      }),
+      async execute(params) {
+        try {
+          return await getText(
+            `/api/entity-state?entity_id=${encodeURIComponent(params.entity_id)}`
+          );
+        } catch (err) {
+          return `home_state unavailable: ${String(err).slice(0, 200)}`;
+        }
+      },
+    }),
+    tool({
+      name: "home_history",
+      description:
+        "История изменений сущности за часы: моменты включения/выключения, " +
+        "тренды. Для числовых — min/mean/max. Поймать падение температуры, " +
+        "время старта кондиционера, длительность работы.",
+      parameters: Type.Object({
+        entity_id: Type.String(),
+        hours: Type.Optional(
+          Type.Number({ description: "окно в часах, 1..168, по умолчанию 24" })
+        ),
+      }),
+      async execute(params) {
+        try {
+          const hours = params.hours ?? 24;
+          return await getText(
+            `/api/entity-history?entity_id=${encodeURIComponent(
+              params.entity_id
+            )}&hours=${encodeURIComponent(String(hours))}`
+          );
+        } catch (err) {
+          return `home_history unavailable: ${String(err).slice(0, 200)}`;
+        }
+      },
+    }),
+    tool({
+      name: "home_statistics",
+      description:
+        "Статистика recorder'а HA за период: суммы (кВт·ч, перерасход ЭЭ), " +
+        "средние/min/max по часам или дням. Только для сущностей со statistics.",
+      parameters: Type.Object({
+        entity_id: Type.String(),
+        hours: Type.Optional(Type.Number({ description: "1..168, по умолчанию 24" })),
+        period: Type.Optional(
+          Type.Union([Type.Literal("hour"), Type.Literal("day")], {
+            description: "по умолчанию hour",
+          })
+        ),
+      }),
+      async execute(params) {
+        try {
+          const hours = params.hours ?? 24;
+          const period = params.period ?? "hour";
+          return await getText(
+            `/api/entity-statistics?entity_id=${encodeURIComponent(
+              params.entity_id
+            )}&hours=${encodeURIComponent(String(hours))}&period=${encodeURIComponent(
+              period
+            )}`
+          );
+        } catch (err) {
+          return `home_statistics unavailable: ${String(err).slice(0, 200)}`;
         }
       },
     }),

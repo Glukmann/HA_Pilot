@@ -51,7 +51,9 @@ VITRINE_MAX_AGE_S = 60
 # v1 — original flat file (no schema_version field);
 # v2 — model profiles in supervisor.models/active_id (0.10.0); v1 files stay
 #      valid via the legacy fallback, we just stamp the version.
-CONFIG_SCHEMA_VERSION = 2
+# v3 — OpenClaw core bundled in the image (0.18.0); the openclaw section
+#      records that the core is managed by the add-on.
+CONFIG_SCHEMA_VERSION = 3
 
 
 def migrate_config(raw: dict[str, Any]) -> dict[str, Any]:
@@ -69,6 +71,16 @@ def migrate_config(raw: dict[str, Any]) -> dict[str, Any]:
         # fields remain valid via modelstore's fallback — nothing to move,
         # only the version stamp changes.
         version = 2
+    if version < 3:
+        # v2 -> v3: the OpenClaw core ships in the image; the section only
+        # records that it is managed by the add-on. An existing section
+        # (e.g. disabled by hand) is preserved — overlay wins below.
+        existing = raw.get("openclaw")
+        raw["openclaw"] = {
+            "enabled": True,
+            **(existing if isinstance(existing, dict) else {}),
+        }
+        version = 3
     raw["schema_version"] = CONFIG_SCHEMA_VERSION
     return raw
 
@@ -145,7 +157,7 @@ class RuntimeState:
         self.data_dir = data_dir
         self.token = token
         self.status = "ok"
-        self.runtime_version = "0.17.1"
+        self.runtime_version = "0.18.0"
         self.started_ts = time.time()
         self.persona: dict[str, int] = {slider: 50 for slider in PERSONA_SLIDERS}
         self.persona_preset = "butler"
@@ -164,6 +176,8 @@ class RuntimeState:
         self.sessions = ChatSessions(Path(data_dir))
         self.events = EventLog(Path(data_dir) / "events.jsonl")
         self.supervisor_busy = False  # ручной run из мастерской (ws)
+        self.core_alive = False  # bundled OpenClaw gateway (merge stage 1)
+        self.core_last_seen_ts: float | None = None
 
     def push_vitrine(self, states: dict[str, dict[str, Any]]) -> None:
         """Merge a pushed batch into the vitrine and journal transitions."""
@@ -360,6 +374,10 @@ class RuntimeState:
             "trust": {
                 "alive": self.queue is not None,
                 "last_run_ts": getattr(self.queue, "last_change_ts", None),
+            },
+            "core": {
+                "alive": self.core_alive,
+                "last_run_ts": self.core_last_seen_ts,
             },
         }
 

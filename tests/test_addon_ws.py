@@ -60,7 +60,7 @@ async def test_ws_status_command(addon) -> None:
             assert payload["cost_today"] == 0.0
             assert payload["uptime_s"] >= 0
             layers = payload["layers"]
-            assert set(layers) == {"vitrine", "checker", "trust"}
+            assert set(layers) == {"vitrine", "checker", "trust", "core"}
             assert layers["vitrine"]["alive"] is False
             assert layers["trust"]["alive"] is True
             assert layers["trust"]["last_run_ts"] is None

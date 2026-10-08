@@ -61,7 +61,8 @@ async def test_set_creates_file_and_sections_coexist(addon, tmp_path) -> None:
             }
             assert (tmp_path / "pilot.json").is_file()
             assert json.loads((tmp_path / "pilot.json").read_text()) == {
-                "schema_version": 2,
+                "schema_version": 3,
+                "openclaw": {"enabled": True},
                 "channels": {"max": {"enabled": True}},
             }
             # A successful set broadcasts status to the acting connection too.
@@ -160,7 +161,8 @@ async def test_set_recovers_from_broken_json(addon, tmp_path) -> None:
     assert len(backups) == 1
     assert "{not json at all" in backups[0].read_text(encoding="utf-8")
     assert json.loads((tmp_path / "pilot.json").read_text()) == {
-        "schema_version": 2,
+        "schema_version": 3,
+        "openclaw": {"enabled": True},
         "channels": {"max": {"enabled": True}},
     }
 

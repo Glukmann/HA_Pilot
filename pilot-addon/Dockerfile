@@ -39,11 +39,14 @@ RUN set -eux; \
     if [ -d pilot-addon/rootfs ]; then \
         cp -r pilot-addon/rootfs /ctx/addon-rootfs; \
         cp -r pilot-addon/workshop /ctx/workshop-out; \
+        cp -r pilot-addon/openclaw-plugin /ctx/plugin; \
     else \
         cp -r rootfs /ctx/addon-rootfs; \
         cp -r workshop /ctx/workshop-out; \
+        cp -r openclaw-plugin /ctx/plugin; \
     fi; \
-    test -f /ctx/workshop-out/dist/index.html
+    test -f /ctx/workshop-out/dist/index.html; \
+    test -f /ctx/plugin/dist/index.js
 
 # --- Stage 1b: the OpenClaw core ---------------------------------------------
 # Copied, not installed: the official image already bundles the right Node
@@ -71,6 +74,17 @@ RUN apt-get update \
 # The core: node + the whole /app package (entry: node /opt/openclaw/openclaw.mjs).
 COPY --from=openclaw-core /usr/local/bin/node /usr/local/bin/node
 COPY --from=openclaw-core /app /opt/openclaw
+
+# The Pilot tool plugin (prebuilt, committed — hermetic installs on the host).
+COPY --from=ctx /ctx/plugin /opt/openclaw-plugins/pilot-home
+# Bare imports ("openclaw/plugin-sdk/*", "typebox") resolve from the plugin
+# dir: openclaw via symlink to the core package, typebox copied (cp -L: the
+# core's node_modules are pnpm symlinks).
+RUN set -eux; \
+    mkdir -p /opt/openclaw-plugins/pilot-home/node_modules; \
+    ln -sfn /opt/openclaw /opt/openclaw-plugins/pilot-home/node_modules/openclaw; \
+    cp -rL /opt/openclaw/node_modules/typebox /opt/openclaw-plugins/pilot-home/node_modules/; \
+    node -e "import('/opt/openclaw-plugins/pilot-home/dist/index.js').then((m)=>{if(!m.default||m.default.id!=='pilot-home')process.exit(1)})"
 
 WORKDIR /app
 COPY --from=ctx /ctx/addon-rootfs/app /app
